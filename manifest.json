@@ -1,7 +1,7 @@
 {
   "id": "/Jandali-Syria-Marketplace/",
-  "name": "سوق هشام جندالي – سوريا",
-  "short_name": "سوق جندالي",
+  "name": "Hicham Jandali Markt",
+  "short_name": "Hicham Jandali",
   "description": "سوق إلكتروني للإعلانات والبيع والشراء في سوريا",
   "lang": "ar",
   "dir": "rtl",
@@ -12,7 +12,7 @@
   "theme_color": "#2e7d32",
   "icons": [
     {
-      "src": "./icon.svg",
+      "src": "./icon.svg?v=2",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
