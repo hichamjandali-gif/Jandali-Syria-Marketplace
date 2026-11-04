@@ -2893,6 +2893,9 @@ if("serviceWorker" in navigator)window.addEventListener("load",()=>navigator.ser
     }catch(e){console.warn("Install count unavailable",e)}
   }
   window.addEventListener("appinstalled",recordInstall);
+  // Count previously installed PWA once when opened in standalone mode.
+  // Browser shortcuts that open in a tab are not counted.
+  if(window.matchMedia("(display-mode: standalone)").matches || navigator.standalone===true){recordInstall()}
 })();
 </script>
 </body>
