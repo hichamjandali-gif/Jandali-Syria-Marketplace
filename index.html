@@ -2879,5 +2879,21 @@ show();
 if("serviceWorker" in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(err=>console.warn("PWA service worker:",err)));
 })();
 </script>
+
+<script>
+/* Anonymous PWA install event counter. Counts reported events, not unique people. */
+(function(){
+  const url="https://xhyobwcaljmoakyvjajb.supabase.co/rest/v1/market_install_events";
+  const key="sb_publishable_ck3rZzTMrKcdfMSKRj-N_w_Ij_oOHJP";
+  async function recordInstall(){
+    if(localStorage.getItem("jandali-install-counted-v1"))return;
+    try{
+      const response=await fetch(url,{method:"POST",headers:{"apikey":key,"Content-Type":"application/json","Prefer":"return=minimal"},body:JSON.stringify({event_type:"installed"})});
+      if(response.ok)localStorage.setItem("jandali-install-counted-v1","1");
+    }catch(e){console.warn("Install count unavailable",e)}
+  }
+  window.addEventListener("appinstalled",recordInstall);
+})();
+</script>
 </body>
 </html>
