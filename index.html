@@ -2866,28 +2866,39 @@ Error generating stack: `+u.message+`
 <script>
 (function(){
 let installEvent=null;
-const css=document.createElement("style");
-css.textContent="#jandali-install{position:fixed;z-index:9900;left:12px;bottom:86px;background:#2e7d32;color:white;border:2px solid #fff;border-radius:16px;padding:12px 17px;font:900 15px system-ui,Tahoma;box-shadow:0 5px 18px #0005;cursor:pointer}#jandali-install[hidden]{display:none}#jandali-install-help{position:fixed;inset:0;z-index:9999;background:#0009;display:flex;align-items:center;justify-content:center;padding:18px}#jandali-install-help[hidden]{display:none}#jandali-install-help>div{direction:rtl;text-align:right;background:white;color:#222;max-width:360px;width:100%;padding:22px;border-radius:20px;font:500 16px/1.8 system-ui,Tahoma;box-shadow:0 10px 40px #0004}#jandali-install-help button{border:0;background:#2e7d32;color:white;border-radius:12px;padding:10px 22px;font:700 15px system-ui;cursor:pointer}";
-document.head.appendChild(css);
-const button=document.createElement("button");button.id="jandali-install";button.type="button";button.textContent="⬇ تثبيت السوق العربي";button.hidden=true;document.body.appendChild(button);
+const ua=navigator.userAgent||"";
+const embedded=/FBAN|FBAV|FB_IAB|FB4A|FBIOS|Instagram|WhatsApp|wv\)|; wv|WebView/i.test(ua);
 const standalone=()=>window.matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;
-const show=()=>{button.hidden=standalone()};
+const css=document.createElement("style");
+css.textContent="#jandali-install{position:fixed;z-index:9900;left:12px;bottom:86px;background:#2e7d32;color:white;border:2px solid #fff;border-radius:16px;padding:12px 17px;font:900 15px system-ui,Tahoma;box-shadow:0 5px 18px #0005;cursor:pointer}#jandali-install[hidden],#jandali-install-help[hidden]{display:none}#jandali-install-help{position:fixed;inset:0;z-index:9999;background:#0009;display:flex;align-items:center;justify-content:center;padding:18px}#jandali-install-help>div{direction:rtl;text-align:right;background:white;color:#222;max-width:360px;width:100%;padding:22px;border-radius:20px;font:500 16px/1.8 system-ui,Tahoma;box-shadow:0 10px 40px #0004}#jandali-install-help button,#jandali-install-help a{display:inline-block;border:0;background:#2e7d32;color:white;border-radius:12px;padding:10px 16px;margin:4px;font:700 15px system-ui;text-decoration:none;cursor:pointer}";
+document.head.appendChild(css);
+const button=document.createElement("button");button.id="jandali-install";button.type="button";button.hidden=true;document.body.appendChild(button);
+function show(){button.hidden=standalone();button.textContent=embedded?"⬇ فتح في Chrome للتثبيت":"⬇ تثبيت السوق العربي"}
 function help(){
- const old=document.getElementById("jandali-install-help");if(old)old.remove();
+ document.getElementById("jandali-install-help")?.remove();
  const overlay=document.createElement("div");overlay.id="jandali-install-help";
- const panel=document.createElement("div");const heading=document.createElement("strong");heading.textContent="تثبيت السوق العربي على الهاتف";heading.style.fontSize="19px";
+ const panel=document.createElement("div");const heading=document.createElement("strong");heading.textContent=embedded?"افتح السوق العربي في Chrome للتثبيت":"تثبيت السوق العربي على الهاتف";heading.style.fontSize="19px";
  const instructions=document.createElement("p");
- const ua=navigator.userAgent||"";
- if(/iPhone|iPad|iPod/i.test(ua))instructions.textContent="افتح الرابط في Safari، ثم اضغط زر المشاركة واختر «إضافة إلى الشاشة الرئيسية».";
- else if(/SamsungBrowser/i.test(ua))instructions.textContent="اضغط قائمة متصفح Samsung Internet (☰)، ثم اختر «إضافة الصفحة إلى» أو «إضافة إلى الشاشة الرئيسية».";
- else instructions.textContent="افتح الرابط في Chrome مباشرة (وليس داخل فيسبوك أو واتساب)، ثم اضغط القائمة ⋮ واختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية».";
- const note=document.createElement("p");note.textContent="إذا لم يظهر خيار التثبيت، يمكنك استخدام الموقع مباشرة من المتصفح. لا يمكن للموقع إجبار الهاتف على التثبيت.";note.style.fontSize="13px";note.style.color="#666";
- const close=document.createElement("button");close.textContent="فهمت";close.onclick=()=>overlay.remove();
- panel.append(heading,instructions,note,close);overlay.appendChild(panel);overlay.onclick=e=>{if(e.target===overlay)overlay.remove()};document.body.appendChild(overlay);
+ if(/iPhone|iPad|iPod/i.test(ua))instructions.textContent="افتح الرابط في Safari، ثم اضغط مشاركة واختر «إضافة إلى الشاشة الرئيسية».";
+ else if(embedded)instructions.textContent="أنت داخل متصفح فيسبوك أو واتساب. اضغط النقاط الثلاث ⋮ أعلى الشاشة واختر «فتح في المتصفح الخارجي» أو «فتح في Chrome». بعدها اضغط «تثبيت السوق العربي».";
+ else if(/SamsungBrowser/i.test(ua))instructions.textContent="من قائمة Samsung Internet (☰) اختر «إضافة الصفحة إلى» ثم «الشاشة الرئيسية».";
+ else instructions.textContent="من قائمة Chrome ⋮ اختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية».";
+ const actions=document.createElement("div");
+ if(embedded&&/Android/i.test(ua)){
+   const chrome=document.createElement("a");chrome.textContent="فتح في Chrome";chrome.href="intent://"+location.host+location.pathname+location.search+"#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url="+encodeURIComponent(location.href)+";end";actions.appendChild(chrome);
+ }
+ const copy=document.createElement("button");copy.textContent="نسخ الرابط";copy.onclick=async()=>{try{await navigator.clipboard.writeText(location.href);copy.textContent="تم نسخ الرابط"}catch(e){const field=document.createElement("input");field.value=location.href;field.readOnly=true;field.style.width="100%";panel.appendChild(field);field.select()}};actions.appendChild(copy);
+ const note=document.createElement("p");note.textContent="التثبيت مجاني. إذا لم يظهر خيار التثبيت، يمكنك استخدام السوق مباشرة من المتصفح.";note.style.fontSize="13px";note.style.color="#666";
+ const close=document.createElement("button");close.textContent="إغلاق";close.onclick=()=>overlay.remove();
+ panel.append(heading,instructions,actions,note,close);overlay.appendChild(panel);overlay.onclick=e=>{if(e.target===overlay)overlay.remove()};document.body.appendChild(overlay);
 }
 window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();installEvent=e;show()});
 window.addEventListener("appinstalled",()=>{installEvent=null;button.hidden=true;document.getElementById("jandali-install-help")?.remove()});
-button.onclick=async()=>{if(standalone()){button.hidden=true;return}if(installEvent){try{const e=installEvent;installEvent=null;await e.prompt();const result=await e.userChoice;if(result?.outcome==="accepted"){button.hidden=true;return}show();}catch(err){console.warn("Install prompt unavailable",err)}}help()};
+button.onclick=async()=>{
+ if(standalone()){button.hidden=true;return}
+ if(installEvent){try{const e=installEvent;installEvent=null;await e.prompt();const result=await e.userChoice;if(result?.outcome==="accepted"){button.hidden=true;return}}catch(err){console.warn("Install prompt unavailable",err)}}
+ help();
+};
 show();
 if("serviceWorker" in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(err=>console.warn("PWA service worker:",err)));
 })();
