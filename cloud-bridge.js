@@ -17,8 +17,44 @@ async function listings(){if(!db)throw Error("تعذر تحميل اتصال Sup
 async function publish(ad){if(!db)throw Error("تعذر تحميل اتصال Supabase");if(!user){authModal();throw Error("سجّل الدخول أولاً، ثم انشر إعلانك")};const urls=[];for(let i=0;i<(ad.images||[]).length;i++){let src=ad.images[i];if(!src.startsWith("data:image/"))throw Error("الصورة غير جاهزة للرفع");const blob=await(await fetch(src)).blob();if(blob.size>8*1024*1024)throw Error("حجم الصورة أكبر من 8 ميغابايت");const mime=blob.type==="image/png"?"png":blob.type==="image/webp"?"webp":"jpg";const name=user.id+"/"+crypto.randomUUID()+"."+mime;const r=await db.storage.from("market-photos").upload(name,blob,{contentType:blob.type||"image/jpeg",upsert:false});if(r.error)throw r.error;urls.push(db.storage.from("market-photos").getPublicUrl(name).data.publicUrl)}const r=await db.from("market_listings").insert({owner_id:user.id,title:ad.title,description:ad.desc||ad.title,category:ad.categoryId,city:ad.city,contact_phone:ad.phone||null,district:ad.district||null,price:ad.isFree?0:(ad.priceNum||null),currency:ad.price?.includes("$")?"USD":"SYP",photo_urls:urls}).select("id").single();if(r.error)throw r.error;return r.data.id}
 async function mine(){if(!await requireLogin())return;const r=await db.from("market_listings").select("*").eq("owner_id",user.id).order("created_at",{ascending:false});if(r.error)return error(r.error);const el=modal('<h2>إعلاناتي الحقيقية</h2>'+(r.data.length?r.data.map(x=>'<div class="item"><b>'+safe(x.title)+'</b><p>'+safe(x.city)+' — '+safe(x.status)+'</p><button data-close="'+safe(x.id)+'">تم البيع / إيقاف الإعلان</button><button data-delete="'+safe(x.id)+'">حذف الإعلان</button></div>').join(""):"<p>لا توجد إعلانات منشورة من حسابك.</p>"));el.querySelectorAll("[data-close]").forEach(b=>b.onclick=async()=>{if(!confirm("إيقاف الإعلان؟"))return;const q=await db.from("market_listings").update({status:"closed"}).eq("id",b.dataset.close).eq("owner_id",user.id);if(q.error)return error(q.error);await mine();change()});el.querySelectorAll("[data-delete]").forEach(b=>b.onclick=async()=>{if(!confirm("حذف الإعلان نهائياً؟"))return;const q=await db.from("market_listings").delete().eq("id",b.dataset.delete).eq("owner_id",user.id);if(q.error)return error(q.error);await mine();change()})}
 async function contact(ad){if(!await requireLogin())return;if(!ad.cloud)return notify("هذه ليست قائمة منشورة على الخادم");if(ad.ownerId===user.id)return notify("هذا إعلانك");let r=await db.from("market_conversations").select("id").eq("listing_id",ad.id).eq("buyer_id",user.id).maybeSingle();if(r.error)return error(r.error);let id=r.data?.id;if(!id){let q=await db.from("market_conversations").insert({listing_id:ad.id,buyer_id:user.id,seller_id:ad.ownerId}).select("id").single();if(q.error)return error(q.error);id=q.data.id}thread(id)}
-async function chats(){if(!await requireLogin())return;let r=await db.from("market_conversations").select("id,listing_id,created_at").or("buyer_id.eq."+user.id+",seller_id.eq."+user.id).order("created_at",{ascending:false});if(r.error)return error(r.error);const el=modal('<h2>الرسائل الخاصة</h2>'+(r.data.length?r.data.map(x=>'<div class="item"><button data-chat="'+safe(x.id)+'">محادثة حول إعلان — '+safe(new Date(x.created_at).toLocaleDateString("ar"))+'</button></div>').join(""):"<p>لا توجد محادثات بعد.</p>"));el.querySelectorAll("[data-chat]").forEach(b=>b.onclick=()=>thread(b.dataset.chat))}
+async function chats(){if(!await requireLogin())return;markMessagesSeen();let r=await db.from("market_conversations").select("id,listing_id,created_at").or("buyer_id.eq."+user.id+",seller_id.eq."+user.id).order("created_at",{ascending:false});if(r.error)return error(r.error);const el=modal('<h2>الرسائل الخاصة</h2>'+(r.data.length?r.data.map(x=>'<div class="item"><button data-chat="'+safe(x.id)+'">محادثة حول إعلان — '+safe(new Date(x.created_at).toLocaleDateString("ar"))+'</button></div>').join(""):"<p>لا توجد محادثات بعد.</p>"));el.querySelectorAll("[data-chat]").forEach(b=>b.onclick=()=>thread(b.dataset.chat))}
 async function thread(id){if(!await requireLogin())return;const el=modal('<h2>محادثة خاصة</h2><div id="market-thread">جار التحميل...</div><form id="market-send"><textarea required maxlength="3000" placeholder="اكتب رسالتك"></textarea><button class="primary">إرسال</button></form>');async function load(){let r=await db.from("market_messages").select("sender_id,body,created_at").eq("conversation_id",id).order("created_at",{ascending:true}).limit(200);if(r.error)return error(r.error);if(el.isConnected)el.querySelector("#market-thread").innerHTML=r.data.map(x=>'<div class="item" style="background:'+(x.sender_id===user.id?"#e7f5ea":"#f5f5f5")+'">'+safe(x.body)+'</div>').join("")||"<p>ابدأ المحادثة.</p>"}el.querySelector("form").onsubmit=async e=>{e.preventDefault();let f=e.target.querySelector("textarea"),body=f.value.trim();if(!body)return;let r=await db.from("market_messages").insert({conversation_id:id,sender_id:user.id,body});if(r.error)return error(r.error);f.value="";await load()};await load()}
-if(db){db.auth.getUser().then(r=>{user=r.data.user||null;change()});db.auth.onAuthStateChange((_e,session)=>{user=session?.user||null;change()})}
+
+/* Incoming-message notice: only messages visible to this authenticated account.
+   Acknowledged per browser/account; not a cross-device read receipt. */
+let noticeBusy=false;
+function seenKey(){return user?"market-last-message-visit-"+user.id:""}
+function markMessagesSeen(){if(!user)return;localStorage.setItem(seenKey(),new Date().toISOString());renderMessageNotice(0)}
+function renderMessageNotice(count){
+  let badge=document.getElementById("market-message-badge");
+  if(!badge){badge=document.createElement("button");badge.id="market-message-badge";badge.type="button";badge.style.cssText="position:fixed;top:calc(env(safe-area-inset-top, 0px) + 12px);left:12px;z-index:9998;background:#2e8b45;color:#fff;border:2px solid #fff;border-radius:18px;padding:9px 12px;font:bold 13px system-ui,Tahoma;box-shadow:0 3px 14px #0003;cursor:pointer";badge.onclick=chats;document.body.appendChild(badge)}
+  badge.hidden=!user||count<1;badge.style.display=badge.hidden?"none":"block";badge.textContent="💬 "+count+" رسالة جديدة";
+  document.querySelectorAll("nav button").forEach(b=>{
+    if(!b.textContent.includes("الرسائل"))return;
+    let dot=b.querySelector(".market-unread-dot");
+    if(count>0){if(!dot){dot=document.createElement("span");dot.className="market-unread-dot";dot.style.cssText="position:absolute;top:0;right:1px;min-width:17px;height:17px;padding:0 3px;border-radius:10px;background:#d92e35;color:white;font:bold 11px system-ui;line-height:17px";b.style.position="relative";b.appendChild(dot)}dot.textContent=count>99?"99+":String(count)}
+    else if(dot)dot.remove()
+  });
+}
+async function checkNewMessages(){
+  if(!db||!user||noticeBusy||document.visibilityState==="hidden")return;
+  noticeBusy=true;
+  try{
+    const me=user.id;
+    const conv=await db.from("market_conversations").select("id").or("buyer_id.eq."+me+",seller_id.eq."+me).limit(200);
+    if(conv.error)throw conv.error;
+    const ids=(conv.data||[]).map(c=>c.id);
+    if(!ids.length){renderMessageNotice(0);return}
+    const since=localStorage.getItem(seenKey())||"1970-01-01T00:00:00.000Z";
+    const msg=await db.from("market_messages").select("id,sender_id,created_at").in("conversation_id",ids).neq("sender_id",me).gt("created_at",since).order("created_at",{ascending:false}).limit(100);
+    if(msg.error)throw msg.error;
+    renderMessageNotice((msg.data||[]).length);
+  }catch(e){console.warn("Message notification check:",e?.message||e)}
+  finally{noticeBusy=false}
+}
+setInterval(checkNewMessages,30000);
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")checkNewMessages()});
+
+if(db){db.auth.getUser().then(r=>{user=r.data.user||null;change();checkNewMessages()});db.auth.onAuthStateChange((_e,session)=>{user=session?.user||null;change();checkNewMessages()})}
 window.jandaliCloud={get user(){return user},setOnChange(fn){change=fn},listings,publish,account,mine,contact,chats,error,authModal};
 })();
