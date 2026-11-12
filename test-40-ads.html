@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>تجربة 40 إعلاناً | السوق العربي</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f4f7f3;color:#18241a;font-family:system-ui,Tahoma,sans-serif;padding-bottom:82px}header{background:#237c35;color:white;padding:18px 16px;position:sticky;top:0;z-index:2;box-shadow:0 3px 10px #0002}header h1{font-size:21px;margin:0 0 6px}header p{margin:0;font-size:13px}main{max-width:1050px;margin:auto;padding:15px}h2{font-size:19px;margin:22px 0 12px}.notice{background:#fff5d8;border:1px solid #e6c16b;border-radius:12px;padding:13px;line-height:1.7}.cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.card{background:white;border:1px solid #dde7dc;border-radius:17px;overflow:hidden;box-shadow:0 3px 9px #0000000a}.pic{height:125px;background:linear-gradient(135deg,#e1f3e3,#f8faf7);display:grid;place-items:center;font-size:63px;position:relative}.flag{position:absolute;top:8px;right:8px;background:#fff3d3;color:#765300;font-size:11px;padding:5px 8px;border-radius:10px;font-weight:700}.body{padding:12px}.body h3{font-size:15px;line-height:1.45;margin:0 0 7px;min-height:42px}.price{font-size:15px;font-weight:800;color:#237c35}.meta{font-size:12px;color:#66726a;margin-top:6px}.details{display:block;margin-top:10px;background:#edf5ee;border:0;border-radius:9px;padding:9px;text-align:center;color:#237c35;font-weight:700;width:100%;font-size:13px}.counter{background:#dff1e3;color:#176b2b;border-radius:30px;padding:3px 10px;font-size:13px}.footer{position:fixed;bottom:0;left:0;right:0;background:white;border-top:1px solid #d5e0d5;padding:11px;text-align:center;z-index:3}.footer a{display:inline-block;background:#237c35;color:white;text-decoration:none;padding:11px 22px;border-radius:12px;font-weight:700} @media(min-width:700px){.cards{grid-template-columns:repeat(4,minmax(0,1fr))}.pic{height:165px}}
+</style></head><body>
+<header><h1>السوق العربي — تجربة 40 إعلاناً</h1><p>10 أقسام × 4 إعلانات — معاينة فقط وليست عروض بيع حقيقية</p></header>
+<main><div class="notice"><strong>نسخة تجريبية:</strong> جميع الإعلانات والأسماء والأسعار هنا أمثلة توضيحية فقط. لا يوجد بائعون لهذه السلع، ولا تُحفظ هذه الإعلانات في قاعدة البيانات.</div><div id="sections"></div></main>
+<div class="footer"><a href="./">العودة إلى السوق الحقيقي</a></div>
+<script>
+const categories=[
+["🚗","سيارات",["سيارة عائلية","سيارة صغيرة","سيارة اقتصادية","سيارة مستعملة"]],
+["🏠","عقارات",["شقة للإيجار","منزل للبيع","محل تجاري","أرض زراعية"]],
+["🛋️","أثاث",["غرفة جلوس","طاولة طعام","خزانة ملابس","سرير خشبي"]],
+["📱","جوالات",["هاتف ذكي","هاتف مستعمل","هاتف بشاشة كبيرة","هاتف اقتصادي"]],
+["👕","ملابس",["ملابس أطفال","جاكيت شتوي","حذاء رياضي","ملابس رجالية"]],
+["💼","وظائف",["نجار مطابخ","عامل توصيل","عامل دهان","فني كهرباء"]],
+["🎁","أغراض مجاناً",["طاولة مجانية","كرسي مجاني","كتب مجانية","ألعاب أطفال مجانية"]],
+["🔨","معلمين وخدمات",["تركيب مطابخ","تصليح أبواب","دهان منازل","صيانة أثاث"]],
+["🐄","حيوانات",["أبقار للتربية","أغنام","دجاج بلدي","طيور زينة"]],
+["🏍️","دراجات نارية",["دراجة مدينة","دراجة صغيرة","دراجة للتنقل","دراجة مستعملة"]]
+];
+const root=document.getElementById("sections");
+let count=0;
+for(const [emoji,category,names] of categories){
+ const section=document.createElement("section"),title=document.createElement("h2");title.textContent=category+" ";
+ const badge=document.createElement("span");badge.className="counter";badge.textContent="4 إعلانات تجريبية";title.append(badge);
+ const cards=document.createElement("div");cards.className="cards";
+ for(const name of names){count++;const card=document.createElement("article");card.className="card";
+ const pic=document.createElement("div");pic.className="pic";pic.textContent=emoji;
+ const flag=document.createElement("span");flag.className="flag";flag.textContent="تجريبي";pic.append(flag);
+ const body=document.createElement("div");body.className="body";
+ const h=document.createElement("h3");h.textContent=name;
+ const price=document.createElement("div");price.className="price";price.textContent=category==="أغراض مجاناً"?"مجاناً":category==="وظائف"||category==="معلمين وخدمات"?"حسب الاتفاق":"سعر تجريبي";
+ const meta=document.createElement("div");meta.className="meta";meta.textContent="إعلان توضيحي رقم "+count;
+ const btn=document.createElement("button");btn.className="details";btn.textContent="معاينة فقط";btn.onclick=()=>alert("هذا إعلان تجريبي للمعاينة فقط، وليس عرضاً حقيقياً.");
+ body.append(h,price,meta,btn);card.append(pic,body);cards.append(card)}
+ section.append(title,cards);root.append(section)
+}
+</script></body></html>
