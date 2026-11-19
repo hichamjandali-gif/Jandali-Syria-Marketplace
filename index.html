@@ -2819,51 +2819,75 @@ async function process(file){
  return await read(blob);
 }
 async function processAlbum(file){
- // Android gallery/Google Photos: read the selected File directly with FileReader.
- // Keep this path separate from the already-working camera processor.
- const fileName=String(file?.name||"");
- const fileType=String(file?.type||"");
- const heic=/\\.(heic|heif)$/i.test(fileName)||/image\\/(heic|heif)/i.test(fileType);
- let dataUrl=await read(file);
- const decodeDataUrl=url=>new Promise((resolve,reject)=>{
+ // Android gallery may return an image File with an empty or generic MIME type.
+ // Read its bytes, identify the real image format, then give the Blob a valid image MIME.
+ if(!file||typeof file.arrayBuffer!=="function")throw new Error("لم يصل ملف الصورة من الاستديو");
+ const buffer=await file.arrayBuffer();
+ if(!buffer||!buffer.byteLength)throw new Error("ملف الاستديو فارغ أو لم يسمح الهاتف بقراءته");
+ const bytes=new Uint8Array(buffer);
+ const ascii=(from,count)=>String.fromCharCode(...bytes.slice(from,from+count));
+ const name=String(file.name||"").toLowerCase();
+ const declared=String(file.type||"").toLowerCase();
+ let mime=declared.startsWith("image/")?declared:"";
+ if(!mime){
+  if(bytes[0]===0xff&&bytes[1]===0xd8&&bytes[2]===0xff)mime="image/jpeg";
+  else if(bytes[0]===0x89&&ascii(1,3)==="PNG")mime="image/png";
+  else if(ascii(0,3)==="GIF")mime="image/gif";
+  else if(ascii(0,4)==="RIFF"&&ascii(8,4)==="WEBP")mime="image/webp";
+  else if(ascii(4,4)==="ftyp"){
+   const brand=ascii(8,4).toLowerCase();
+   if(/^(heic|heix|hevc|hevx|mif1|msf1)$/.test(brand))mime="image/heic";
+   else if(brand==="avif"||brand==="avis")mime="image/avif";
+  }
+ }
+ if(!mime){
+  if(/\.(jpe?g)$/i.test(name))mime="image/jpeg";
+  else if(/\.png$/i.test(name))mime="image/png";
+  else if(/\.webp$/i.test(name))mime="image/webp";
+  else if(/\.gif$/i.test(name))mime="image/gif";
+  else if(/\.(heic|heif)$/i.test(name))mime="image/heic";
+ }
+ if(!mime)throw new Error("لم أتعرف على صيغة الصورة التي أعادها الاستديو");
+ const blob=new Blob([buffer],{type:mime});
+ const heic=mime==="image/heic"||mime==="image/heif";
+ let dataUrl;
+ if(heic){
+  const convert=await library();
+  const converted=await limit(Promise.resolve().then(()=>convert({blob,toType:"image/jpeg",quality:0.82})),25000,"تحويل صورة HEIC استغرق وقتاً طويلاً");
+  const jpeg=Array.isArray(converted)?converted[0]:converted;
+  if(!(jpeg instanceof Blob)||!jpeg.size)throw new Error("لم ينتج تحويل HEIC صورة JPEG");
+  dataUrl=await read(jpeg);
+ }else{
+  dataUrl=await read(blob);
+ }
+ const image=await new Promise((resolve,reject)=>{
   const img=new Image();
   img.onload=()=>resolve(img);
-  img.onerror=()=>reject(new Error("تعذر فك صورة الألبوم"));
-  img.src=url;
+  img.onerror=()=>reject(new Error("تعذر فتح الصورة التي اختارها الاستديو"));
+  img.src=dataUrl;
  });
- let image;
- try{image=await decodeDataUrl(dataUrl)}
- catch(readError){
-  if(!heic)throw readError;
-  const convert=await library();
-  const converted=await limit(Promise.resolve().then(()=>convert({blob:file,toType:"image/jpeg",quality:0.82})),25000,"تحويل صورة HEIC استغرق وقتاً طويلاً");
-  const jpeg=Array.isArray(converted)?converted[0]:converted;
-  if(!(jpeg instanceof Blob)||!jpeg.size)throw new Error("لم ينتج التحويل صورة JPEG");
-  dataUrl=await read(jpeg);
-  image=await decodeDataUrl(dataUrl);
- }
  let width=image.naturalWidth||image.width,height=image.naturalHeight||image.height;
  if(!width||!height)throw new Error("أبعاد صورة الألبوم غير صالحة");
  const scale=Math.min(1,1600/Math.max(width,height));
  width=Math.max(1,Math.round(width*scale));height=Math.max(1,Math.round(height*scale));
  const canvas=document.createElement("canvas"),ctx=canvas.getContext("2d");
  if(!ctx)throw new Error("تعذر تجهيز صورة الألبوم");
- let blob=null;
+ let compressed=null;
  for(let resize=0;resize<10;resize++){
   canvas.width=width;canvas.height=height;
   ctx.fillStyle="#ffffff";ctx.fillRect(0,0,width,height);ctx.drawImage(image,0,0,width,height);
   let quality=0.75;
   for(let attempt=0;attempt<8;attempt++){
-   blob=await new Promise(resolve=>canvas.toBlob(resolve,"image/jpeg",quality));
-   if(!blob)throw new Error("تعذر ضغط صورة الألبوم");
-   if(blob.size<2*1024*1024)break;
+   compressed=await new Promise(resolve=>canvas.toBlob(resolve,"image/jpeg",quality));
+   if(!compressed)throw new Error("تعذر ضغط صورة الألبوم");
+   if(compressed.size<2*1024*1024)break;
    quality=Math.max(0.45,quality-0.05);
   }
-  if(blob&&blob.size<2*1024*1024)break;
+  if(compressed&&compressed.size<2*1024*1024)break;
   width=Math.max(1,Math.floor(width*0.85));height=Math.max(1,Math.floor(height*0.85));
  }
- if(!blob||blob.size>=2*1024*1024)throw new Error("تعذر ضغط صورة الألبوم إلى أقل من 2 ميغابايت");
- return await read(blob);
+ if(!compressed||compressed.size>=2*1024*1024)throw new Error("تعذر ضغط صورة الألبوم إلى أقل من 2 ميغابايت");
+ return await read(compressed);
 }
 return {process,processAlbum};
 })();
