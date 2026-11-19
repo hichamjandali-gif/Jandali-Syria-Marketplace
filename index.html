@@ -2763,17 +2763,32 @@ const read=file=>new Promise((resolve,reject)=>{const reader=new FileReader();re
 const check=url=>limit(new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(url);img.onerror=()=>reject(new Error("الصورة غير قابلة للعرض"));img.src=url}),12000,"انتهت مهلة فحص الصورة");
 const library=()=>{if(typeof window.heic2any==="function")return Promise.resolve(window.heic2any);if(!loading)loading=limit(new Promise((resolve,reject)=>{const script=document.createElement("script");script.src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js";script.onload=()=>typeof window.heic2any==="function"?resolve(window.heic2any):reject(new Error("مكتبة HEIC غير متاحة"));script.onerror=()=>reject(new Error("تعذر تحميل مكتبة HEIC"));document.head.appendChild(script)}),15000,"انتهت مهلة تحميل مكتبة HEIC").catch(err=>{loading=null;throw err});return loading};
 async function process(file){
- const heic=/\.(heic|heif)$/i.test(file.name)||/image\/(heic|heif)/i.test(file.type);
+ const fileName=String(file?.name||"");
+ const fileType=String(file?.type||"");
+ const heic=/\\.(heic|heif)$/i.test(fileName)||/image\\/(heic|heif)/i.test(fileType);
+ // Android's picker may expose a content-backed File with incomplete MIME/name metadata.
+ // Normalize it to a fresh Blob before FileReader so the browser reads the granted content URI.
+ const source=file instanceof Blob?file.slice(0,file.size,fileType||"application/octet-stream"):new Blob([file],{type:fileType||"application/octet-stream"});
+ if(!source.size)throw new Error("الصورة المختارة فارغة أو لم يمنح النظام إذن قراءتها");
  let dataUrl,image;
  const decode=url=>new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(new Error("الصورة غير قابلة للقراءة"));img.src=url});
- try{dataUrl=await read(file);image=await decode(dataUrl)}
- catch(error){
-  if(!heic)throw error;
-  const convert=await library();
-  const converted=await limit(Promise.resolve().then(()=>convert({blob:file,toType:"image/jpeg",quality:0.82})),25000,"تحويل HEIC استغرق وقتاً طويلاً");
-  const jpeg=Array.isArray(converted)?converted[0]:converted;
-  if(!(jpeg instanceof Blob)||!jpeg.size)throw new Error("لم ينتج التحويل صورة JPEG");
-  dataUrl=await read(jpeg);image=await decode(dataUrl);
+ try{
+  dataUrl=await read(source);
+  image=await decode(dataUrl);
+ }catch(readError){
+  // Some Android camera images are HEIC even when the picker reports a generic or wrong MIME type.
+  // Try HEIC conversion after any decode/read failure, not only when the filename says .heic.
+  try{
+   const convert=await library();
+   const converted=await limit(Promise.resolve().then(()=>convert({blob:source,toType:"image/jpeg",quality:0.82})),25000,"تحويل صورة HEIC استغرق وقتاً طويلاً");
+   const jpeg=Array.isArray(converted)?converted[0]:converted;
+   if(!(jpeg instanceof Blob)||!jpeg.size)throw new Error("لم ينتج التحويل صورة JPEG");
+   dataUrl=await read(jpeg);
+   image=await decode(dataUrl);
+  }catch(convertError){
+   if(heic)throw convertError;
+   throw readError;
+  }
  }
  let width=image.naturalWidth||image.width,height=image.naturalHeight||image.height;
  if(!width||!height)throw new Error("أبعاد الصورة غير صالحة");
