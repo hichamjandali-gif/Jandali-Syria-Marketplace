@@ -33,14 +33,39 @@ const TEST_ADS=[
  {id:"jandali-test-coffee-machine",categoryId:"kitchen",title:"TEST - مكنة قهوة",price:"77,777 ل.س (سعر تجريبي)",priceNum:77777,city:"دير الزور - القصور",district:"القصور",emoji:"☕",bg:"#FFFDE7",desc:"إعلان تجريبي للاختبار فقط، لا تتصل. ماكينة قهوة تجريبية.",date:"TEST",seller:"TEST",phone:"0999999999",isFree:false,localOwner:false,status:"active",cloud:false,test:true,imageSymbol:"☕",imageLabel:"مكنة قهوة",imageAccent:"#6D4C41"}
 ].map(ad=>({...ad,images:[testImage(ad.imageSymbol,ad.imageLabel,ad.bg,ad.imageAccent)]}));
 
-async function listings(){if(!db)throw Error("تعذر تحميل اتصال Supabase");const r=await db.from("market_listings").select("*").eq("status","active").order("created_at",{ascending:false}).limit(200);if(r.error)throw r.error;return [...(r.data||[]).map(toUI),...TEST_ADS]}
+let listingRows=[],listingOffset=0,listingHasMore=true,listingBusy=false,listingStarted=false;
+async function fetchListingPage(reset=false){
+ if(!db)throw Error("تعذر تحميل اتصال Supabase");
+ if(reset){listingRows=[];listingOffset=0;listingHasMore=true;listingStarted=false}
+ if(listingBusy||!listingHasMore)return [...listingRows,...TEST_ADS];
+ listingBusy=true;
+ try{
+  const r=await db.from("market_listings").select("*").eq("status","active").order("created_at",{ascending:false}).range(listingOffset,listingOffset+9);
+  if(r.error)throw r.error;
+  const page=r.data||[];
+  listingRows=reset?page.map(toUI):[...listingRows,...page.map(toUI)];
+  listingOffset+=page.length;
+  listingHasMore=page.length===10;
+  listingStarted=true;
+  return [...listingRows,...TEST_ADS];
+ }finally{listingBusy=false}
+}
+async function listings(){if(!listingStarted)return fetchListingPage(true);return [...listingRows,...TEST_ADS]}
+async function loadMoreListings(){if(!listingStarted||!listingHasMore||listingBusy)return;await fetchListingPage(false);change()}
+document.addEventListener("scroll",event=>{
+ const el=event.target===document?document.scrollingElement:event.target;
+ if(el&&typeof el.scrollHeight==="number"&&el.scrollHeight-el.scrollTop-el.clientHeight<850)loadMoreListings().catch(error);
+},true);
+window.addEventListener("scroll",()=>{
+ const el=document.scrollingElement||document.documentElement;
+ if(el&&el.scrollHeight-el.scrollTop-el.clientHeight<850)loadMoreListings().catch(error);
+},{passive:true});
 async function publish(ad){
  if(!db)throw Error("تعذر تحميل اتصال Supabase");
  if(!user){authModal();throw Error("سجّل الدخول أولاً، ثم انشر إعلانك")}
- const listingId=crypto.randomUUID(),urls=[],storagePaths=[];
- const photos=Array.isArray(ad.images)?ad.images:[];
- for(let i=0;i<photos.length;i++){
-  const src=photos[i];
+ const listingId=crypto.randomUUID(),photos=Array.isArray(ad.images)?ad.images:[];
+ if(photos.length>8)throw Error("الحد الأقصى 8 صور للإعلان");
+ const uploads=await Promise.allSettled(photos.map(async src=>{
   if(typeof src!=="string"||!src.startsWith("data:image/"))throw Error("الصورة غير جاهزة للرفع");
   const blob=await(await fetch(src)).blob();
   if(blob.size>=2*1024*1024)throw Error("تعذر ضغط الصورة إلى أقل من 2 ميغابايت؛ أعد اختيار الصورة");
@@ -48,15 +73,21 @@ async function publish(ad){
   const name=user.id+"/"+listingId+"/"+crypto.randomUUID()+"."+mime;
   const uploaded=await db.storage.from("market-photos").upload(name,blob,{contentType:blob.type||"image/jpeg",upsert:false});
   if(uploaded.error)throw uploaded.error;
-  storagePaths.push(name);
-  urls.push(db.storage.from("market-photos").getPublicUrl(name).data.publicUrl);
+  return {name,url:db.storage.from("market-photos").getPublicUrl(name).data.publicUrl};
+ }));
+ const completed=uploads.filter(item=>item.status==="fulfilled").map(item=>item.value);
+ if(uploads.some(item=>item.status==="rejected")){
+  if(completed.length)await db.storage.from("market-photos").remove(completed.map(item=>item.name)).catch(()=>{});
+  throw uploads.find(item=>item.status==="rejected").reason;
  }
+ const urls=completed.map(item=>item.url);
  const row={id:listingId,owner_id:user.id,title:ad.title,description:ad.desc||ad.title,category:ad.categoryId,city:ad.city,contact_phone:ad.phone||null,district:ad.district||null,price:ad.isFree?0:(ad.priceNum||null),currency:ad.price?.includes("$")?"USD":"SYP",photo_urls:urls};
  const saved=await db.from("market_listings").insert(row).select("id,photo_urls").single();
  if(saved.error){
-  if(storagePaths.length)await db.storage.from("market-photos").remove(storagePaths).catch(()=>{});
+  if(completed.length)await db.storage.from("market-photos").remove(completed.map(item=>item.name)).catch(()=>{});
   throw saved.error;
  }
+ listingRows=[];listingOffset=0;listingHasMore=true;listingStarted=false;
  return saved.data.id;
 }
 async function mine(){if(!await requireLogin())return;const r=await db.from("market_listings").select("*").eq("owner_id",user.id).order("created_at",{ascending:false});if(r.error)return error(r.error);const el=modal('<h2>إعلاناتي الحقيقية</h2>'+(r.data.length?r.data.map(x=>'<div class="item"><b>'+safe(x.title)+'</b><p>'+safe(x.city)+' — '+safe(x.status)+'</p><button data-close="'+safe(x.id)+'">تم البيع / إيقاف الإعلان</button><button data-delete="'+safe(x.id)+'">حذف الإعلان</button></div>').join(""):"<p>لا توجد إعلانات منشورة من حسابك.</p>"));el.querySelectorAll("[data-close]").forEach(b=>b.onclick=async()=>{if(!confirm("إيقاف الإعلان؟"))return;const q=await db.from("market_listings").update({status:"closed"}).eq("id",b.dataset.close).eq("owner_id",user.id);if(q.error)return error(q.error);await mine();change()});el.querySelectorAll("[data-delete]").forEach(b=>b.onclick=async()=>{if(!confirm("حذف الإعلان نهائياً؟"))return;const q=await db.from("market_listings").delete().eq("id",b.dataset.delete).eq("owner_id",user.id);if(q.error)return error(q.error);await mine();change()})}
