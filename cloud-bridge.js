@@ -23,7 +23,7 @@ async function publish(ad){
   const src=photos[i];
   if(typeof src!=="string"||!src.startsWith("data:image/"))throw Error("الصورة غير جاهزة للرفع");
   const blob=await(await fetch(src)).blob();
-  if(blob.size>8*1024*1024)throw Error("حجم الصورة أكبر من 8 ميغابايت");
+  if(blob.size>=2*1024*1024)throw Error("تعذر ضغط الصورة إلى أقل من 2 ميغابايت؛ أعد اختيار الصورة");
   const mime=blob.type==="image/png"?"png":blob.type==="image/webp"?"webp":"jpg";
   const name=user.id+"/"+listingId+"/"+crypto.randomUUID()+"."+mime;
   const uploaded=await db.storage.from("market-photos").upload(name,blob,{contentType:blob.type||"image/jpeg",upsert:false});
