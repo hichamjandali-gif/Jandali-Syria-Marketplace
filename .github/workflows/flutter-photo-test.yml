@@ -22,6 +22,13 @@ jobs:
         with:
           channel: stable
           cache: true
+      - name: Generate Android platform scaffold
+        working-directory: flutter_app
+        run: |
+          flutter create --platforms=android --project-name jandali_market_photo_test _android_scaffold
+          cp -R _android_scaffold/android ./android
+          cp _android_scaffold/.metadata .metadata
+          rm -rf _android_scaffold
       - name: Install dependencies
         working-directory: flutter_app
         run: flutter pub get
