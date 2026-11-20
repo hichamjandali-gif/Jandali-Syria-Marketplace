@@ -25,7 +25,7 @@ jobs:
       - name: Generate Android platform scaffold
         working-directory: flutter_app
         run: |
-          flutter create --platforms=android --project-name jandali_market_photo_test _android_scaffold
+          flutter create --platforms=android --project-name jandali_market_photo_test_v2 _android_scaffold
           cp -R _android_scaffold/android ./android
           cp _android_scaffold/.metadata .metadata
           rm -rf _android_scaffold
@@ -54,6 +54,6 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: jandali-photo-test-debug-apk
+          name: jandali-photo-test-v2-debug-apk
           path: flutter_app/build/app/outputs/flutter-apk/app-debug.apk
           if-no-files-found: error
