@@ -35,9 +35,22 @@ jobs:
       - name: Analyze
         working-directory: flutter_app
         run: flutter analyze --no-fatal-infos
+      - name: Verify Supabase key is configured
+        env:
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::error::Add SUPABASE_ANON_KEY in GitHub repository Actions secrets before building."
+            exit 1
+          fi
       - name: Build APK
         working-directory: flutter_app
-        run: flutter build apk --debug
+        env:
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          flutter build apk --debug \
+            --dart-define=SUPABASE_URL=https://xhyobwcaljmoakyvjajb.supabase.co \
+            --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
