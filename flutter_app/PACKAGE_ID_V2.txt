@@ -1,0 +1,1 @@
+This photo-test build uses a separate Android application ID generated from project name jandali_market_photo_test_v2. It is intended to install alongside the previous photo-test app.
