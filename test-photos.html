@@ -1,325 +1,156 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#126b4d">
-<title>اختبار صور السوق العربي</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>تجربة عرض صور HEIC الحقيقية - السوق العربي</title>
+<!-- heic2any - يحول HEIC النقي الى JPG على https:// -->
+<script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
 <style>
-  :root { color-scheme: light; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: #f4f6f5; color: #18221e; }
-  main { max-width: 900px; margin: 0 auto; padding: 18px 14px 40px; }
-  h1 { font-size: 1.35rem; margin: 4px 0 8px; }
-  p { line-height: 1.65; }
-  .hint { color: #52615a; font-size: .92rem; }
-  .panel { background: white; border: 1px solid #dce5df; border-radius: 14px; padding: 15px; margin: 14px 0; }
-  .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-  button, .pick { border: 0; border-radius: 10px; padding: 12px 16px; font: inherit; font-weight: 650; cursor: pointer; }
-  .pick, button.primary { background: #126b4d; color: white; }
-  button.secondary { background: #e8eeea; color: #1d3027; }
-  button:disabled { opacity: .55; cursor: wait; }
-  input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; }
-  .stats { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
-  .stat { background: #f0f5f1; border-radius: 10px; padding: 9px 12px; min-width: 110px; }
-  .stat b { display: block; font-size: 1.2rem; font-variant-numeric: tabular-nums; }
-  #status { min-height: 1.5em; margin-top: 10px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(145px,1fr)); gap: 12px; }
-  .item { background: white; border: 1px solid #dce5df; border-radius: 12px; overflow: hidden; min-width: 0; }
-  .preview { height: 140px; background: #eef2ef; display: grid; place-items: center; color: #52615a; padding: 8px; text-align: center; }
-  .preview img { width: 100%; height: 100%; object-fit: contain; }
-  .meta { padding: 9px; font-size: .83rem; overflow-wrap: anywhere; }
-  .name { font-weight: 650; margin-bottom: 5px; }
-  .good { color: #087443; }
-  .bad { color: #a13b2d; }
-  .small { font-size: .78rem; color: #5d6a63; }
-  .hidden { display: none !important; }
+*{box-sizing:border-box} body{font-family:system-ui,-apple-system,sans-serif;background:#f4f4f9;margin:0;padding:16px;display:flex;flex-direction:column;align-items:center}
+.container{background:#fff;padding:20px;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.08);width:100%;max-width:500px;text-align:center}
+h1{font-size:19px;margin:0 0 6px} .sub{font-size:12px;color:#666;margin-bottom:12px;line-height:1.5}
+.counter{font-size:28px;font-weight:800;margin-bottom:14px}
+.buttons{display:flex;gap:10px;margin-bottom:12px}
+button{flex:1;padding:14px 10px;font-size:15px;font-weight:700;border:none;border-radius:8px;cursor:pointer;color:#fff}
+.btn-gallery{background:#0b6623} .btn-clear{background:#6c757d} .btn-camera{background:#198754;width:100%;margin-bottom:14px}
+button:disabled{background:#bbb;cursor:not-allowed}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.stat-box{background:#f8f9fa;padding:10px;border-radius:8px;border:1px solid #e9ecef} .stat-title{font-size:12px;color:#666} .stat-val{font-size:18px;font-weight:800;margin-top:4px}
+.preview-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.preview-item{position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;border:1px solid #ddd;background:#f8f9fa;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px;font-size:12px;color:#555;text-align:center}
+.preview-item img{width:100%;height:100%;object-fit:cover;display:block;position:absolute;inset:0}
+.badge{position:absolute;bottom:6px;left:6px;background:rgba(0,0,0,.7);color:#fff;font-size:11px;padding:3px 7px;border-radius:5px;z-index:2}
+.remove-btn{position:absolute;top:6px;right:6px;background:#dc3545;color:#fff;border:none;border-radius:50%;width:26px;height:26px;font-size:16px;line-height:1;padding:0;cursor:pointer;z-index:3}
+.warning-banner{background:#fff3cd;color:#856404;padding:10px;border-radius:8px;font-size:13px;margin-bottom:12px;display:none;line-height:1.5}
+.ok{color:#198754;font-size:13px;font-weight:700;margin-bottom:8px}
+.info{font-size:12px;color:#888;margin-top:14px;line-height:1.6}
 </style>
 </head>
 <body>
-<main>
-  <h1>اختبار صور الألبوم – السوق العربي</h1>
-  <p class="hint">صفحة اختبار مستقلة. اختر حتى 8 صور، بحد أقصى 12 ميغابايت للصورة. الملفات الأصلية تبقى محفوظة في الذاكرة كما اختيرت؛ المعاينة وحدها تُنشأ منها.</p>
-
-  <section class="panel">
-    <div class="actions">
-      <label class="pick" for="files">اختيار الصور من الألبوم</label>
-      <input id="files" type="file" accept="image/*,.heic,.heif,image/heic,image/heif" multiple>
-      <button id="clear" class="secondary" type="button">مسح الصور</button>
-    </div>
-    <div class="stats">
-      <div class="stat"><span>عدد الصور</span><b id="count">0 / 8</b></div>
-      <div class="stat"><span>وقت المعالجة</span><b id="elapsed">— ms</b></div>
-      <div class="stat"><span>جاهزة للمعاينة</span><b id="ready">0</b></div>
-    </div>
-    <div id="status" role="status" aria-live="polite" class="hint">لم يتم اختيار صور بعد.</div>
-  </section>
-
-  <section id="gallery" class="grid" aria-live="polite"></section>
-</main>
-
-<script type="module">
-const MAX_FILES = 8;
-const MAX_BYTES = 12 * 1024 * 1024;
-const JPEG_MIN = 5 * 1024;
-const JPEG_MAX = 500 * 1024;
-const HEIF_MODULE = "https://cdn.jsdelivr.net/npm/libheif-js@1.23.5/libheif-wasm/libheif-bundle.mjs";
-
-const input = document.getElementById("files");
-const gallery = document.getElementById("gallery");
-const countEl = document.getElementById("count");
-const elapsedEl = document.getElementById("elapsed");
-const readyEl = document.getElementById("ready");
-const statusEl = document.getElementById("status");
-const clearBtn = document.getElementById("clear");
-
-let originalFiles = [];
-let previewUrls = [];
-let heifModulePromise = null;
-let readyCount = 0;
-
-function setCount(n) { countEl.textContent = `${n} / ${MAX_FILES}`; }
-function formatBytes(n) {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / 1024 / 1024).toFixed(2)} MB`;
-}
-function isHeif(file, bytes) {
-  const name = (file.name || "").toLowerCase();
-  const type = (file.type || "").toLowerCase();
-  if (/\.hei[cf]$/.test(name) || type.includes("heic") || type.includes("heif")) return true;
-  // HEIF brands may be heic, heix, hevc, hevx, mif1 or msf1 after the ftyp box.
-  if (bytes && bytes.length >= 12) {
-    const brand = String.fromCharCode(...bytes.slice(8, 12)).toLowerCase();
-    return ["heic", "heix", "hevc", "hevx", "mif1", "msf1"].includes(brand);
-  }
-  return false;
-}
-function makeCard(file) {
-  const card = document.createElement("article");
-  card.className = "item";
-  const preview = document.createElement("div");
-  preview.className = "preview";
-  preview.textContent = "⏳ جارٍ تجهيز المعاينة…";
-  const meta = document.createElement("div");
-  meta.className = "meta";
-  const name = document.createElement("div");
-  name.className = "name";
-  name.textContent = file.name || "صورة";
-  const detail = document.createElement("div");
-  detail.className = "small";
-  detail.textContent = `${formatBytes(file.size)} · ${file.type || "نوع غير محدد"}`;
-  const result = document.createElement("div");
-  result.className = "small";
-  result.textContent = "قيد المعالجة";
-  meta.append(name, detail, result);
-  card.append(preview, meta);
-  gallery.append(card);
-  return { card, preview, result };
-}
-function testImageLoad(blob) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(blob);
-    const img = new Image();
-    img.onload = async () => {
-      try { if (img.decode) await img.decode(); } catch (_) {}
-      resolve({ url, width: img.naturalWidth, height: img.naturalHeight });
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("المتصفح لم يستطع عرض الصورة")); };
-    img.src = url;
-  });
-}
-function findLargestEmbeddedJpeg(bytes) {
-  let best = null;
-  let start = -1;
-  for (let i = 0; i < bytes.length - 1; i++) {
-    if (start < 0 && bytes[i] === 0xff && bytes[i + 1] === 0xd8) {
-      start = i;
-      i++;
-      continue;
-    }
-    if (start >= 0 && bytes[i] === 0xff && bytes[i + 1] === 0xd9) {
-      const end = i + 2;
-      const size = end - start;
-      if (size >= JPEG_MIN && size <= JPEG_MAX && (!best || size > best.size)) {
-        best = { start, end, size };
-      }
-      start = -1;
-      i++;
-    }
-  }
-  return best ? new Blob([bytes.slice(best.start, best.end)], { type: "image/jpeg" }) : null;
-}
-async function loadHeifModule() {
-  if (!heifModulePromise) {
-    heifModulePromise = import(HEIF_MODULE).then(mod => mod.default || mod);
-  }
-  return heifModulePromise;
-}
-async function decodePureHeif(bytes) {
-  const libheif = await loadHeifModule();
-  const decoder = new libheif.HeifDecoder();
-  const images = decoder.decode(bytes);
-  if (!images || !images.length) throw new Error("لم يتم العثور على صورة HEIC قابلة للفك");
-  const image = images[0];
-  const width = image.get_width();
-  const height = image.get_height();
-  if (!width || !height || width * height > 50000000) throw new Error("أبعاد الصورة غير صالحة أو تتجاوز 50 ميغابكسل");
-  const pixels = new Uint8ClampedArray(width * height * 4);
-  const imageData = { data: pixels, width, height };
-  await new Promise((resolve, reject) => {
-    try {
-      image.display(imageData, displayData => {
-        if (!displayData) reject(new Error("فشل فك ترميز HEIC"));
-        else resolve();
-      });
-    } catch (e) { reject(e); }
-  });
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d", { alpha: false });
-  if (!ctx) throw new Error("تعذر إنشاء Canvas");
-  ctx.putImageData(new ImageData(pixels, width, height), 0, 0);
-  const blob = await new Promise((resolve, reject) => {
-    canvas.toBlob(b => b ? resolve(b) : reject(new Error("تعذر إنشاء معاينة JPEG")), "image/jpeg", 0.88);
-  });
-  return blob;
-}
-async function processOne(record, card) {
-  const { file, buffer } = record;
-  if (!buffer) throw new Error("تعذرت قراءة الصورة من الألبوم عند اختيارها");
-  const bytes = new Uint8Array(buffer);
-  // بعد القراءة الأولى لا نعود إلى مرجع content:// أو File مطلقاً.
-  const memoryBlob = new Blob([buffer], { type: file.type || "application/octet-stream" });
-
-  // أولاً: نبحث عن أكبر JPEG مصغّر مضمّن في ملف HEIC/HEIF.
-  const embedded = findLargestEmbeddedJpeg(bytes);
-  if (embedded) {
-    try {
-      const loaded = await testImageLoad(embedded);
-      return { ...loaded, method: "مصغّرة JPEG مضمّنة", original: file };
-    } catch (_) {
-      // لا نعرض صورة فاشلة؛ ننتقل إلى فك الملف الأصلي.
-    }
-  }
-
-  // ثانياً: نختبر الصورة الأصلية في المتصفح (JPG/PNG/WebP وغيرها).
-  if (!isHeif(file, bytes)) {
-    try {
-      const loaded = await testImageLoad(memoryBlob);
-      return { ...loaded, method: "عرض الملف الأصلي", original: file };
-    } catch (_) {
-      // إذا لم يستطع المتصفح عرضها، نجرّب HEIF فقط عندما يكون نوعها HEIF.
-      throw new Error("صيغة الصورة غير مدعومة في هذا المتصفح");
-    }
-  }
-
-  // ثالثاً: فك HEIC/HEIF الحقيقي بواسطة libheif-js.
-  const decodedBlob = await decodePureHeif(bytes);
-  const loaded = await testImageLoad(decodedBlob);
-  return { ...loaded, method: "فك HEIC إلى معاينة JPEG", original: file };
-}
-function showResult(card, result) {
-  card.preview.replaceChildren();
-  const img = document.createElement("img");
-  img.alt = card.result.textContent || "معاينة الصورة";
-  img.src = result.url;
-  card.preview.append(img);
-  previewUrls.push(result.url);
-  card.result.textContent = `✅ جاهزة · ${result.method} · ${result.width}×${result.height}`;
-  card.result.className = "small good";
-  readyCount++;
-  readyEl.textContent = String(readyCount);
-}
-function showFailure(card, error) {
-  card.preview.textContent = "⚠️ تعذّر إنشاء معاينة لهذه الصورة";
-  card.result.textContent = `الملف الأصلي محفوظ للاختبار · ${error.message || error}`;
-  card.result.className = "small bad";
-}
-function resetGallery() {
-  previewUrls.forEach(url => URL.revokeObjectURL(url));
-  previewUrls = [];
-  originalFiles = [];
-  readyCount = 0;
-  gallery.replaceChildren();
-  setCount(0);
-  readyEl.textContent = "0";
-  elapsedEl.textContent = "— ms";
-  statusEl.textContent = "لم يتم اختيار صور بعد.";
-  input.value = "";
-}
-input.addEventListener("change", async () => {
-  const chosen = Array.from(input.files || []);
-  if (!chosen.length) return;
-
-  // مهم لأندرويد: نبدأ قراءة كل ملف فور حدث الاختيار، قبل أي await أو معالجة.
-  // نحتفظ بوعد القراءة مرة واحدة فقط، ولا نستخدم File/content:// بعد ذلك.
-  const selected = chosen.slice(0, MAX_FILES);
-  const records = selected
-    .filter(file => file.size <= MAX_BYTES)
-    .map(file => ({
-      file,
-      bufferPromise: file.arrayBuffer()
-    }));
-
-  resetGallery();
-  if (chosen.length > MAX_FILES) {
-    statusEl.textContent = `اخترت ${chosen.length} صور. الحد الأقصى ${MAX_FILES} صور؛ عالج أول ${MAX_FILES} فقط.`;
-  }
-  const tooLargeCount = selected.filter(file => file.size > MAX_BYTES).length;
-  if (tooLargeCount) {
-    statusEl.textContent = `تم استبعاد ${tooLargeCount} صورة لأن حجمها يتجاوز 12 ميغابايت.`;
-  }
-  if (!records.length) return;
-
-  setCount(records.length);
-  const cards = records.map(record => makeCard(record.file));
-  const start = performance.now();
-  statusEl.textContent = `جارٍ حفظ ${records.length} صور في الذاكرة ثم تجهيز المعاينة…`;
-
-  // تحويل نتائج القراءة إلى مخازن ذاكرة. لا تتم إعادة قراءة File في أي مرحلة لاحقة.
-  const snapshots = await Promise.all(records.map(async record => {
-    try {
-      return { ...record, buffer: await record.bufferPromise };
-    } catch (error) {
-      return { ...record, buffer: null, readError: error };
-    } finally {
-      delete record.bufferPromise;
-    }
-  }));
-  originalFiles = snapshots.filter(record => record.buffer).map(record => ({
-    name: record.file.name,
-    type: record.file.type,
-    size: record.file.size,
-    lastModified: record.file.lastModified,
-    buffer: record.buffer
-  }));
-
-  // Promise.all يعالج النسخ الموجودة في الذاكرة، مع الحفاظ على ترتيب الصور.
-  const results = await Promise.all(snapshots.map(async (record, index) => {
-    try {
-      if (record.readError || !record.buffer) throw new Error("فشلت القراءة الأولى للصورة من الألبوم: " + (record.readError?.message || "لا توجد بيانات"));
-      const result = await processOne(record, cards[index]);
-      showResult(cards[index], result);
-      return { ok: true };
-    } catch (error) {
-      showFailure(cards[index], error);
-      return { ok: false, error };
-    }
-  }));
-
-  const ms = performance.now() - start;
-  elapsedEl.textContent = `${ms.toFixed(0)} ms`;
-  const failed = results.filter(result => !result.ok).length;
-  statusEl.textContent = failed
-    ? `انتهت المعالجة: ${readyCount} جاهزة للمعاينة، و${failed} لم تُعرض. تم الاحتفاظ بالملفات التي قُرئت في الذاكرة.`
-    : `اكتملت معاينة الصور الـ ${records.length} بنجاح.`;
-  console.info("Original image snapshots retained in memory:", originalFiles);
+<div class="container">
+<div class="warning-banner" id="protocolWarning">⚠️ تنبيه: أنت تفتح الصفحة من مسار محلي (content:// أو file://). لعرض صور HEIC النقية، يجب فتح الصفحة عبر رابط <b>https://</b>.</div>
+<h1>🛒 السوق العربي - HEIC الحقيقي</h1>
+<div class="sub">يعمل على أي هاتف - قراءة مرة واحدة - توازي - فك تشفير HEIC النقي بـ heic2any على https://</div>
+<div class="counter" id="counter">(0/8)</div>
+<div class="buttons">
+<button class="btn-clear" id="btnClear">🗑️ مسح الصور</button>
+<button class="btn-gallery" id="btnGallery">📁 اختيار الصور من الألبوم</button>
+</div>
+<button class="btn-camera" id="btnCamera">📷 التقاط صورة</button>
+<input type="file" id="galleryInput" accept=".jpg,.jpeg,.png,.heic,.heif,.webp,image/*" multiple style="display:none">
+<input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none">
+<div class="stats">
+<div class="stat-box"><div class="stat-title">جاهزة للمعاينة</div><div class="stat-val" id="readyCount">0</div></div>
+<div class="stat-box"><div class="stat-title">وقت المعالجة</div><div class="stat-val" id="timerVal">0 ms</div></div>
+<div class="stat-box"><div class="stat-title">عدد الصور</div><div class="stat-val" id="totalCount">0 / 8</div></div>
+</div>
+<div class="ok" id="okMsg">✅ جاهز - اختار صور من أي هاتف</div>
+<div class="preview-grid" id="previewGrid"></div>
+<div class="info">على https:// : HEIC النقي يتحول بـ heic2any ويظهر صورة حقيقية.<br>على content:// : HEIC النقي يظهر بطاقة نظيفة، والملف محفوظ للرفع.</div>
+</div>
+<script>
+const MAX_PHOTOS=8; const MAX_SIZE=12*1024*1024;
+let photoItems=[];
+window.addEventListener('DOMContentLoaded',()=>{
+ if(window.location.protocol!=='https:' && window.location.hostname!=='localhost' && window.location.hostname!=='127.0.0.1'){
+  document.getElementById('protocolWarning').style.display='block';
+ }
+ console.log('heic2any loaded:', typeof heic2any !== 'undefined');
 });
-
-clearBtn.addEventListener("click", resetGallery);
-setCount(0);
+const galleryInput=document.getElementById('galleryInput');
+const cameraInput=document.getElementById('cameraInput');
+const counterEl=document.getElementById('counter');
+const previewGrid=document.getElementById('previewGrid');
+const okMsg=document.getElementById('okMsg');
+document.getElementById('btnGallery').onclick=()=>galleryInput.click();
+document.getElementById('btnCamera').onclick=()=>cameraInput.click();
+document.getElementById('btnClear').onclick=()=>clearAll();
+galleryInput.addEventListener('change',e=>handleFiles(e.target.files));
+cameraInput.addEventListener('change',e=>handleFiles(e.target.files));
+function clearAll(){ photoItems.forEach(i=>{if(i.previewUrl) URL.revokeObjectURL(i.previewUrl)}); photoItems=[]; galleryInput.value=''; cameraInput.value=''; okMsg.textContent='✅ تم المسح - جاهز'; renderUI(performance.now()); }
+async function handleFiles(files){
+ if(!files||!files.length) return;
+ const start=performance.now();
+ const validFiles=[];
+ for(let file of files){ if(photoItems.length+validFiles.length>=MAX_PHOTOS) break; if(file.size<=MAX_SIZE) validFiles.push(file); }
+ const loaded = await Promise.all(validFiles.map(async(file)=>{
+  try{ const buffer=await file.arrayBuffer(); return {file, buffer}; }catch(e){ return {file, buffer:null, error:e.message}; }
+ }));
+ const processed = await Promise.all(loaded.map(async({file,buffer,error})=>{
+  const ext=(file.name.split('.').pop()||'').toLowerCase();
+  let previewUrl=null;
+  if(!error && buffer){ previewUrl=await createPreviewUrl(file, buffer, ext); }
+  return {file, blob: buffer?new Blob([buffer],{type:file.type||'image/heic'}):file, previewUrl, ext:ext.toUpperCase(), name:file.name, size:file.size, type:file.type, error};
+ }));
+ photoItems.push(...processed);
+ galleryInput.value=''; cameraInput.value='';
+ okMsg.textContent='✅ تم استلام '+photoItems.length+' صورة - جاهزة للرفع على أي هاتف';
+ renderUI(start);
+}
+async function createPreviewUrl(file, arrayBuffer, ext){
+ if(['jpg','jpeg','png','webp'].includes(ext)){ return URL.createObjectURL(file); }
+ const nativeUrl=URL.createObjectURL(file);
+ if(await testImageLoad(nativeUrl)) return nativeUrl;
+ URL.revokeObjectURL(nativeUrl);
+ try{
+  const embedded = extractJpegFromBuffer(arrayBuffer);
+  if(embedded && await testImageLoad(embedded)) return embedded;
+  if(embedded) URL.revokeObjectURL(embedded);
+ }catch(e){}
+ // heic2any - يحول HEIC النقي الى JPG - يعمل على https://
+ if(typeof heic2any !== 'undefined'){
+  try{
+   const out = await heic2any({blob: new Blob([arrayBuffer], {type: file.type||'image/heic'}), toType: 'image/jpeg', quality: 0.85});
+   const blob = Array.isArray(out)?out[0]:out;
+   const bmp = await createImageBitmap(blob);
+   const scale = Math.min(1, 800/Math.max(bmp.width, bmp.height));
+   const tw = Math.round(bmp.width*scale); const th = Math.round(bmp.height*scale);
+   const c = document.createElement('canvas'); c.width=tw; c.height=th;
+   c.getContext('2d').drawImage(bmp, 0, 0, tw, th);
+   const jpegUrl = await new Promise((res)=>{ c.toBlob((b)=>{ res(b?URL.createObjectURL(b):null); }, 'image/jpeg', 0.8); });
+   if(jpegUrl && await testImageLoad(jpegUrl)) return jpegUrl;
+   if(jpegUrl) URL.revokeObjectURL(jpegUrl);
+  }catch(err){ console.error('heic2any failed', err); }
+ }
+ return null;
+}
+function extractJpegFromBuffer(buffer){
+ const bytes=new Uint8Array(buffer); let best=null, maxSize=0;
+ for(let i=0;i<bytes.length-3;i++){
+  if(bytes[i]===0xFF&&bytes[i+1]===0xD8&&bytes[i+2]===0xFF){
+   for(let j=i+2;j<bytes.length-1;j++){
+    if(bytes[j]===0xFF&&bytes[j+1]===0xD9){ const size=(j+2)-i; if(size>5000&&size<500000&&size>maxSize){ maxSize=size; best=bytes.slice(i,j+2); } i=j; break; }
+   }
+  }
+ }
+ if(best) return URL.createObjectURL(new Blob([best],{type:'image/jpeg'}));
+ return null;
+}
+function testImageLoad(url){ return new Promise((resolve)=>{ const img=new Image(); img.onload=()=>resolve(true); img.onerror=()=>resolve(false); img.src=url; }); }
+function removePhoto(index){ const s=performance.now(); const item=photoItems[index]; if(item.previewUrl) URL.revokeObjectURL(item.previewUrl); photoItems.splice(index,1); renderUI(s); }
+function renderUI(start){
+ const ready=photoItems.filter(p=>p.previewUrl).length;
+ counterEl.textContent='('+photoItems.length+'/'+MAX_PHOTOS+')';
+ document.getElementById('readyCount').textContent=ready;
+ document.getElementById('totalCount').textContent=photoItems.length+' / '+MAX_PHOTOS;
+ const dur=(performance.now()-start).toFixed(0);
+ document.getElementById('timerVal').textContent=dur+' ms';
+ const full=photoItems.length>=MAX_PHOTOS; document.getElementById('btnGallery').disabled=full; document.getElementById('btnCamera').disabled=full;
+ previewGrid.innerHTML='';
+ photoItems.forEach((item,index)=>{
+  const div=document.createElement('div'); div.className='preview-item';
+  if(item.previewUrl){
+   const img=document.createElement('img'); img.src=item.previewUrl; div.appendChild(img);
+   const badge=document.createElement('span'); badge.className='badge'; badge.textContent=item.ext; div.appendChild(badge);
+  } else {
+   const sizeMB=(item.size/(1024*1024)).toFixed(2);
+   div.innerHTML='<div><div style="font-size:22px">⚠️</div><div>تعذّر إنشاء معاينة لهذه الصورة</div><div style="font-weight:700;margin-top:6px">'+item.name+'</div><div>'+sizeMB+' MB · '+(item.type||'')+'</div><div style="margin-top:6px;color:#666">الملف الأصلي محفوظ - افتح على https:// لعرض HEIC النقي</div></div>';
+  }
+  const b=document.createElement('button'); b.className='remove-btn'; b.textContent='×'; b.onclick=()=>removePhoto(index); div.appendChild(b);
+  previewGrid.appendChild(div);
+ });
+}
 </script>
 </body>
 </html>
