@@ -1,0 +1,1 @@
+Trigger a fresh Flutter photo-test APK build after configuring the SUPABASE_ANON_KEY GitHub Actions secret. This file does not affect the app or Supabase data.
