@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#126b4d">
+<title>اختبار صور السوق العربي</title>
+<style>
+  :root { color-scheme: light; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f4f6f5; color: #18221e; }
+  main { max-width: 900px; margin: 0 auto; padding: 18px 14px 40px; }
+  h1 { font-size: 1.35rem; margin: 4px 0 8px; }
+  p { line-height: 1.65; }
+  .hint { color: #52615a; font-size: .92rem; }
+  .panel { background: white; border: 1px solid #dce5df; border-radius: 14px; padding: 15px; margin: 14px 0; }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  button, .pick { border: 0; border-radius: 10px; padding: 12px 16px; font: inherit; font-weight: 650; cursor: pointer; }
+  .pick, button.primary { background: #126b4d; color: white; }
+  button.secondary { background: #e8eeea; color: #1d3027; }
+  button:disabled { opacity: .55; cursor: wait; }
+  input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; }
+  .stats { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+  .stat { background: #f0f5f1; border-radius: 10px; padding: 9px 12px; min-width: 110px; }
+  .stat b { display: block; font-size: 1.2rem; font-variant-numeric: tabular-nums; }
+  #status { min-height: 1.5em; margin-top: 10px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(145px,1fr)); gap: 12px; }
+  .item { background: white; border: 1px solid #dce5df; border-radius: 12px; overflow: hidden; min-width: 0; }
+  .preview { height: 140px; background: #eef2ef; display: grid; place-items: center; color: #52615a; padding: 8px; text-align: center; }
+  .preview img { width: 100%; height: 100%; object-fit: contain; }
+  .meta { padding: 9px; font-size: .83rem; overflow-wrap: anywhere; }
+  .name { font-weight: 650; margin-bottom: 5px; }
+  .good { color: #087443; }
+  .bad { color: #a13b2d; }
+  .small { font-size: .78rem; color: #5d6a63; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>اختبار صور الألبوم – السوق العربي</h1>
+  <p class="hint">صفحة اختبار مستقلة. اختر حتى 8 صور، بحد أقصى 12 ميغابايت للصورة. الملفات الأصلية تبقى محفوظة في الذاكرة كما اختيرت؛ المعاينة وحدها تُنشأ منها.</p>
+
+  <section class="panel">
+    <div class="actions">
+      <label class="pick" for="files">اختيار الصور من الألبوم</label>
+      <input id="files" type="file" accept="image/*,.heic,.heif,image/heic,image/heif" multiple>
+      <button id="clear" class="secondary" type="button">مسح الصور</button>
+    </div>
+    <div class="stats">
+      <div class="stat"><span>عدد الصور</span><b id="count">0 / 8</b></div>
+      <div class="stat"><span>وقت المعالجة</span><b id="elapsed">— ms</b></div>
+      <div class="stat"><span>جاهزة للمعاينة</span><b id="ready">0</b></div>
+    </div>
+    <div id="status" role="status" aria-live="polite" class="hint">لم يتم اختيار صور بعد.</div>
+  </section>
+
+  <section id="gallery" class="grid" aria-live="polite"></section>
+</main>
+
+<script type="module">
+const MAX_FILES = 8;
+const MAX_BYTES = 12 * 1024 * 1024;
+const JPEG_MIN = 5 * 1024;
+const JPEG_MAX = 500 * 1024;
+const HEIF_MODULE = "https://cdn.jsdelivr.net/npm/libheif-js@1.23.5/libheif-wasm/libheif-bundle.mjs";
+
+const input = document.getElementById("files");
+const gallery = document.getElementById("gallery");
+const countEl = document.getElementById("count");
+const elapsedEl = document.getElementById("elapsed");
+const readyEl = document.getElementById("ready");
+const statusEl = document.getElementById("status");
+const clearBtn = document.getElementById("clear");
+
+let originalFiles = [];
+let previewUrls = [];
+let heifModulePromise = null;
+let readyCount = 0;
+
+function setCount(n) { countEl.textContent = `${n} / ${MAX_FILES}`; }
+function formatBytes(n) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(2)} MB`;
+}
+function isHeif(file, bytes) {
+  const name = (file.name || "").toLowerCase();
+  const type = (file.type || "").toLowerCase();
+  if (/\.hei[cf]$/.test(name) || type.includes("heic") || type.includes("heif")) return true;
+  // HEIF brands may be heic, heix, hevc, hevx, mif1 or msf1 after the ftyp box.
+  if (bytes && bytes.length >= 12) {
+    const brand = String.fromCharCode(...bytes.slice(8, 12)).toLowerCase();
+    return ["heic", "heix", "hevc", "hevx", "mif1", "msf1"].includes(brand);
+  }
+  return false;
+}
+function makeCard(file) {
+  const card = document.createElement("article");
+  card.className = "item";
+  const preview = document.createElement("div");
+  preview.className = "preview";
+  preview.textContent = "⏳ جارٍ تجهيز المعاينة…";
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  const name = document.createElement("div");
+  name.className = "name";
+  name.textContent = file.name || "صورة";
+  const detail = document.createElement("div");
+  detail.className = "small";
+  detail.textContent = `${formatBytes(file.size)} · ${file.type || "نوع غير محدد"}`;
+  const result = document.createElement("div");
+  result.className = "small";
+  result.textContent = "قيد المعالجة";
+  meta.append(name, detail, result);
+  card.append(preview, meta);
+  gallery.append(card);
+  return { card, preview, result };
+}
+function testImageLoad(blob) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = async () => {
+      try { if (img.decode) await img.decode(); } catch (_) {}
+      resolve({ url, width: img.naturalWidth, height: img.naturalHeight });
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("المتصفح لم يستطع عرض الصورة")); };
+    img.src = url;
+  });
+}
+function findLargestEmbeddedJpeg(bytes) {
+  let best = null;
+  let start = -1;
+  for (let i = 0; i < bytes.length - 1; i++) {
+    if (start < 0 && bytes[i] === 0xff && bytes[i + 1] === 0xd8) {
+      start = i;
+      i++;
+      continue;
+    }
+    if (start >= 0 && bytes[i] === 0xff && bytes[i + 1] === 0xd9) {
+      const end = i + 2;
+      const size = end - start;
+      if (size >= JPEG_MIN && size <= JPEG_MAX && (!best || size > best.size)) {
+        best = { start, end, size };
+      }
+      start = -1;
+      i++;
+    }
+  }
+  return best ? new Blob([bytes.slice(best.start, best.end)], { type: "image/jpeg" }) : null;
+}
+async function loadHeifModule() {
+  if (!heifModulePromise) {
+    heifModulePromise = import(HEIF_MODULE).then(mod => mod.default || mod);
+  }
+  return heifModulePromise;
+}
+async function decodePureHeif(bytes) {
+  const libheif = await loadHeifModule();
+  const decoder = new libheif.HeifDecoder();
+  const images = decoder.decode(bytes);
+  if (!images || !images.length) throw new Error("لم يتم العثور على صورة HEIC قابلة للفك");
+  const image = images[0];
+  const width = image.get_width();
+  const height = image.get_height();
+  if (!width || !height || width * height > 50000000) throw new Error("أبعاد الصورة غير صالحة أو تتجاوز 50 ميغابكسل");
+  const pixels = new Uint8ClampedArray(width * height * 4);
+  const imageData = { data: pixels, width, height };
+  await new Promise((resolve, reject) => {
+    try {
+      image.display(imageData, displayData => {
+        if (!displayData) reject(new Error("فشل فك ترميز HEIC"));
+        else resolve();
+      });
+    } catch (e) { reject(e); }
+  });
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d", { alpha: false });
+  if (!ctx) throw new Error("تعذر إنشاء Canvas");
+  ctx.putImageData(new ImageData(pixels, width, height), 0, 0);
+  const blob = await new Promise((resolve, reject) => {
+    canvas.toBlob(b => b ? resolve(b) : reject(new Error("تعذر إنشاء معاينة JPEG")), "image/jpeg", 0.88);
+  });
+  return blob;
+}
+async function processOne(record, card) {
+  const { file, buffer } = record;
+  if (!buffer) throw new Error("تعذرت قراءة الصورة من الألبوم عند اختيارها");
+  const bytes = new Uint8Array(buffer);
+  // بعد القراءة الأولى لا نعود إلى مرجع content:// أو File مطلقاً.
+  const memoryBlob = new Blob([buffer], { type: file.type || "application/octet-stream" });
+
+  // أولاً: نبحث عن أكبر JPEG مصغّر مضمّن في ملف HEIC/HEIF.
+  const embedded = findLargestEmbeddedJpeg(bytes);
+  if (embedded) {
+    try {
+      const loaded = await testImageLoad(embedded);
+      return { ...loaded, method: "مصغّرة JPEG مضمّنة", original: file };
+    } catch (_) {
+      // لا نعرض صورة فاشلة؛ ننتقل إلى فك الملف الأصلي.
+    }
+  }
+
+  // ثانياً: نختبر الصورة الأصلية في المتصفح (JPG/PNG/WebP وغيرها).
+  if (!isHeif(file, bytes)) {
+    try {
+      const loaded = await testImageLoad(memoryBlob);
+      return { ...loaded, method: "عرض الملف الأصلي", original: file };
+    } catch (_) {
+      // إذا لم يستطع المتصفح عرضها، نجرّب HEIF فقط عندما يكون نوعها HEIF.
+      throw new Error("صيغة الصورة غير مدعومة في هذا المتصفح");
+    }
+  }
+
+  // ثالثاً: فك HEIC/HEIF الحقيقي بواسطة libheif-js.
+  const decodedBlob = await decodePureHeif(bytes);
+  const loaded = await testImageLoad(decodedBlob);
+  return { ...loaded, method: "فك HEIC إلى معاينة JPEG", original: file };
+}
+function showResult(card, result) {
+  card.preview.replaceChildren();
+  const img = document.createElement("img");
+  img.alt = card.result.textContent || "معاينة الصورة";
+  img.src = result.url;
+  card.preview.append(img);
+  previewUrls.push(result.url);
+  card.result.textContent = `✅ جاهزة · ${result.method} · ${result.width}×${result.height}`;
+  card.result.className = "small good";
+  readyCount++;
+  readyEl.textContent = String(readyCount);
+}
+function showFailure(card, error) {
+  card.preview.textContent = "⚠️ تعذّر إنشاء معاينة لهذه الصورة";
+  card.result.textContent = `الملف الأصلي محفوظ للاختبار · ${error.message || error}`;
+  card.result.className = "small bad";
+}
+function resetGallery() {
+  previewUrls.forEach(url => URL.revokeObjectURL(url));
+  previewUrls = [];
+  originalFiles = [];
+  readyCount = 0;
+  gallery.replaceChildren();
+  setCount(0);
+  readyEl.textContent = "0";
+  elapsedEl.textContent = "— ms";
+  statusEl.textContent = "لم يتم اختيار صور بعد.";
+  input.value = "";
+}
+input.addEventListener("change", async () => {
+  const chosen = Array.from(input.files || []);
+  if (!chosen.length) return;
+
+  // مهم لأندرويد: نبدأ قراءة كل ملف فور حدث الاختيار، قبل أي await أو معالجة.
+  // نحتفظ بوعد القراءة مرة واحدة فقط، ولا نستخدم File/content:// بعد ذلك.
+  const selected = chosen.slice(0, MAX_FILES);
+  const records = selected
+    .filter(file => file.size <= MAX_BYTES)
+    .map(file => ({
+      file,
+      bufferPromise: file.arrayBuffer()
+    }));
+
+  resetGallery();
+  if (chosen.length > MAX_FILES) {
+    statusEl.textContent = `اخترت ${chosen.length} صور. الحد الأقصى ${MAX_FILES} صور؛ عالج أول ${MAX_FILES} فقط.`;
+  }
+  const tooLargeCount = selected.filter(file => file.size > MAX_BYTES).length;
+  if (tooLargeCount) {
+    statusEl.textContent = `تم استبعاد ${tooLargeCount} صورة لأن حجمها يتجاوز 12 ميغابايت.`;
+  }
+  if (!records.length) return;
+
+  setCount(records.length);
+  const cards = records.map(record => makeCard(record.file));
+  const start = performance.now();
+  statusEl.textContent = `جارٍ حفظ ${records.length} صور في الذاكرة ثم تجهيز المعاينة…`;
+
+  // تحويل نتائج القراءة إلى مخازن ذاكرة. لا تتم إعادة قراءة File في أي مرحلة لاحقة.
+  const snapshots = await Promise.all(records.map(async record => {
+    try {
+      return { ...record, buffer: await record.bufferPromise };
+    } catch (error) {
+      return { ...record, buffer: null, readError: error };
+    } finally {
+      delete record.bufferPromise;
+    }
+  }));
+  originalFiles = snapshots.filter(record => record.buffer).map(record => ({
+    name: record.file.name,
+    type: record.file.type,
+    size: record.file.size,
+    lastModified: record.file.lastModified,
+    buffer: record.buffer
+  }));
+
+  // Promise.all يعالج النسخ الموجودة في الذاكرة، مع الحفاظ على ترتيب الصور.
+  const results = await Promise.all(snapshots.map(async (record, index) => {
+    try {
+      if (record.readError || !record.buffer) throw new Error("فشلت القراءة الأولى للصورة من الألبوم: " + (record.readError?.message || "لا توجد بيانات"));
+      const result = await processOne(record, cards[index]);
+      showResult(cards[index], result);
+      return { ok: true };
+    } catch (error) {
+      showFailure(cards[index], error);
+      return { ok: false, error };
+    }
+  }));
+
+  const ms = performance.now() - start;
+  elapsedEl.textContent = `${ms.toFixed(0)} ms`;
+  const failed = results.filter(result => !result.ok).length;
+  statusEl.textContent = failed
+    ? `انتهت المعالجة: ${readyCount} جاهزة للمعاينة، و${failed} لم تُعرض. تم الاحتفاظ بالملفات التي قُرئت في الذاكرة.`
+    : `اكتملت معاينة الصور الـ ${records.length} بنجاح.`;
+  console.info("Original image snapshots retained in memory:", originalFiles);
+});
+
+clearBtn.addEventListener("click", resetGallery);
+setCount(0);
+</script>
+</body>
+</html>
