@@ -53,8 +53,7 @@ class MarketService {
     if(category!=null&&category.isNotEmpty) req=req.eq('category',category);
     if(city!=null&&city.trim().isNotEmpty) req=req.ilike('city','%${city.trim()}%');
     final r=await req.order('created_at',ascending:false).limit(200);
-    if(r.error!=null) throw r.error!;
-    final items=(r.data as List).map((e)=>MarketListing.fromMap(e as Map<String,dynamic>)).toList();
+    final items=r.map((e)=>MarketListing.fromMap(e as Map<String,dynamic>)).toList();
     final q=query.trim().toLowerCase();
     if(q.isEmpty)return items;
     return items.where((x)=>'${x.title} ${x.description} ${x.city} ${x.district??''}'.toLowerCase().contains(q)).toList();
@@ -63,8 +62,7 @@ class MarketService {
   Future<List<MarketListing>> myListings() async {
     final u=user;if(u==null)throw Exception('سجّل الدخول أولاً');
     final r=await db.from('market_listings').select().eq('owner_id',u.id).order('created_at',ascending:false);
-    if(r.error!=null)throw r.error!;
-    return (r.data as List).map((e)=>MarketListing.fromMap(e as Map<String,dynamic>)).toList();
+    return r.map((e)=>MarketListing.fromMap(e as Map<String,dynamic>)).toList();
   }
 
   Future<String> publish({required String title,required String description,required String category,required String city,String? district,String? phone,num? price,required String currency,required List<Uint8List> photoBytes,required List<String> photoNames}) async {
@@ -102,35 +100,32 @@ class MarketService {
   Future<void> closeListing(String id) async {
     final u=user;if(u==null)throw Exception('سجّل الدخول');
     final r=await db.from('market_listings').update({'status':'closed'}).eq('id',id).eq('owner_id',u.id);
-    if(r.error!=null)throw r.error!;
   }
   Future<void> deleteListing(String id) async {
     final u=user;if(u==null)throw Exception('سجّل الدخول');
     final r=await db.from('market_listings').delete().eq('id',id).eq('owner_id',u.id);
-    if(r.error!=null)throw r.error!;
   }
   Future<String> openConversation(MarketListing listing) async {
     final u=user;if(u==null)throw Exception('سجّل الدخول للمراسلة');
     if(listing.ownerId==u.id)throw Exception('هذا إعلانك');
     final old=await db.from('market_conversations').select('id').eq('listing_id',listing.id).eq('buyer_id',u.id).maybeSingle();
-    if(old.error!=null)throw old.error!;
-    if(old.data!=null)return old.data!['id'] as String;
+    if(old!=null)return old['id'] as String;
     final r=await db.from('market_conversations').insert({'listing_id':listing.id,'buyer_id':u.id,'seller_id':listing.ownerId}).select('id').single();
     return r['id'] as String;
   }
   Future<List<Map<String,dynamic>>> conversations() async {
     final u=user;if(u==null)throw Exception('سجّل الدخول');
     final r=await db.from('market_conversations').select().or('buyer_id.eq.${u.id},seller_id.eq.${u.id}').order('created_at',ascending:false);
-    if(r.error!=null)throw r.error!;return (r.data as List).cast<Map<String,dynamic>>();
+    return r.cast<Map<String,dynamic>>();
   }
   Future<List<Map<String,dynamic>>> messages(String id) async {
     final r=await db.from('market_messages').select().eq('conversation_id',id).order('created_at',ascending:true).limit(200);
-    if(r.error!=null)throw r.error!;return (r.data as List).cast<Map<String,dynamic>>();
+    return r.cast<Map<String,dynamic>>();
   }
   Future<void> sendMessage(String id,String body) async {
     final u=user;if(u==null)throw Exception('سجّل الدخول');
     final text=body.trim();if(text.isEmpty)return;
     final r=await db.from('market_messages').insert({'conversation_id':id,'sender_id':u.id,'body':text});
-    if(r.error!=null)throw r.error!;
+    
   }
 }
