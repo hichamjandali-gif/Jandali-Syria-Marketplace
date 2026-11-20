@@ -2835,7 +2835,7 @@ const processFast=async file=>{
  if(!file||typeof file.size!=="number"||file.size<=0)throw new Error("ملف الصورة فارغ أو غير صالح");
  const type=String(file.type||"").toLowerCase(),name=String(file.name||"").toLowerCase();
  if(type==="image/jpeg"&&file.size<=4*1024*1024)return await read(file);
- if(/heic|heif/.test(type)||/\\.(heic|heif)$/.test(name))return await process(file);
+ if(/heic|heif/.test(type)||/\.(heic|heif)$.test(name))return await process(file);
  if(typeof createImageBitmap!=="function")return await process(file);
  let image;
  try{image=await createImageBitmap(file)}catch{return await process(file)}
