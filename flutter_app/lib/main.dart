@@ -13,8 +13,8 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'market_service.dart';
 
-const url = String.fromEnvironment('SUPABASE_URL');
-const anon = String.fromEnvironment('SUPABASE_ANON_KEY');
+const url = const String.fromEnvironment('SUPABASE_URL');
+const anon = const String.fromEnvironment('SUPABASE_ANON_KEY');
 const green = Color(0xFF178447);
 
 Future<void> main() async {
