@@ -1,6 +1,4 @@
 import 'dart:convert';
-import 'dart:core';
-import 'dart:core' as core;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -15,8 +13,8 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'market_service.dart';
 
-const url = const core.String.fromEnvironment('SUPABASE_URL');
-const anon = const core.String.fromEnvironment('SUPABASE_ANON_KEY');
+const url = String.fromEnvironment('SUPABASE_URL');
+const anon = String.fromEnvironment('SUPABASE_ANON_KEY');
 const green = Color(0xFF178447);
 
 Future<void> main() async {
