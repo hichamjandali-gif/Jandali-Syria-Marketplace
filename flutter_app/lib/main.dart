@@ -65,8 +65,15 @@ class _AuthDialogState extends State<AuthDialog> {
       } else if (signup) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('افتح بريدك لتأكيد الحساب، ثم سجّل الدخول')));
       }
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+    } on AuthException catch (e) {
+      if (mounted) {
+        final invalid = e.statusCode == '400' || e.code == 'invalid_credentials' || e.message.toLowerCase().contains('invalid login credentials');
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(invalid
+          ? 'الإيميل أو كلمة المرور غير صحيحة - أو أنشئ حساب جديد'
+          : (signup ? 'تعذر إنشاء الحساب. تحقق من البيانات وحاول مجدداً' : 'تعذر تسجيل الدخول. حاول مرة أخرى'))));
+      }
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('حدث خطأ. تحقق من الاتصال وحاول مرة أخرى')));
     } finally {
       if (mounted) setState(() => waiting = false);
     }
@@ -100,9 +107,19 @@ class _MarketHomeState extends State<MarketHome> {
   final searchBox = TextEditingController();
   final speech = stt.SpeechToText();
   bool listening = false;
+  final homeTts = FlutterTts();
+  String radius = '25';
 
   @override void initState() { super.initState(); loadFav(); load(); }
-  @override void dispose() { searchBox.dispose(); speech.stop(); super.dispose(); }
+  @override void dispose() { searchBox.dispose(); speech.stop(); homeTts.stop(); super.dispose(); }
+
+  Future<void> speak(String text) async { try { await homeTts.setLanguage('ar-SA'); await homeTts.speak(text); } catch (_) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ميزة الاستماع غير متاحة على هذا الجهاز'))); } }
+
+  Future<void> changeLocation() async {
+    final r = await Navigator.push<Map<String, String>>(context, MaterialPageRoute(builder: (_) => const MapPage()));
+    if (!mounted || r == null) return;
+    setState(() { city = r['city'] ?? city; radius = r['radius'] ?? radius; });
+  }
 
   Future<void> voiceSearch() async {
     try {
@@ -178,7 +195,7 @@ class _MarketHomeState extends State<MarketHome> {
       bottomNavigationBar: NavigationBar(selectedIndex: tab, onDestinationSelected: (v) => setState(() => tab = v), destinations: const [
         NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'الرئيسية'),
         NavigationDestination(icon: Icon(Icons.search), label: 'بحث'),
-        NavigationDestination(icon: Icon(Icons.favorite_border), selectedIcon: Icon(Icons.favorite), label: 'المفضلة'),
+        NavigationDestination(icon: Icon(Icons.favorite_border), selectedIcon: Icon(Icons.favorite), label: fav.isEmpty ? 'المفضلة' : 'المفضلة (${fav.length})'),
         NavigationDestination(icon: Icon(Icons.chat_bubble_outline), label: 'الرسائل'),
         NavigationDestination(icon: Icon(Icons.person_outline), label: 'حسابي'),
       ]),
@@ -193,7 +210,7 @@ class _MarketHomeState extends State<MarketHome> {
     const SizedBox(height: 15), const Text('الأقسام', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 19)),
     GridView.builder(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), itemCount: marketCategories.length,
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, childAspectRatio: 1.08, crossAxisSpacing: 7, mainAxisSpacing: 7),
-      itemBuilder: (c, i) { final x = marketCategories[i]; return InkWell(onTap: () => setState(() { category = x.id; tab = 1; }), child: Container(decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Text(x.emoji, style: const TextStyle(fontSize: 28)), Text(x.name, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))]))); }),
+      itemBuilder: (c, i) { final x = marketCategories[i]; return InkWell(onTap: () => setState(() { category = x.id; tab = 1; }), child: Container(decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Text(x.emoji, style: const TextStyle(fontSize: 28)), Text(x.name, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)), IconButton(visualDensity: VisualDensity.compact, onPressed: () => speak(x.name + '. ' + x.subtitle), icon: const Icon(Icons.volume_up, size: 17), tooltip: 'استمع')]))); }),
     const SizedBox(height: 14), const Text('أحدث الإعلانات', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 19)),
     feed(ads.take(15).toList()),
   ]));
@@ -201,7 +218,7 @@ class _MarketHomeState extends State<MarketHome> {
   Widget searchPage() => Column(children: [
     Padding(padding: const EdgeInsets.all(12), child: Column(children: [
       TextField(controller: searchBox, onChanged: (v) => setState(() => search = v), decoration: InputDecoration(prefixIcon: const Icon(Icons.search), suffixIcon: IconButton(onPressed: voiceSearch, icon: Icon(listening ? Icons.mic : Icons.mic_none, color: listening ? Colors.red : null), tooltip: 'بحث صوتي'), hintText: 'ابحث عن سلعة أو خدمة', filled: true, fillColor: Colors.white)),
-      const Align(alignment: Alignment.centerRight, child: Text('الموقع: كاسل، ألمانيا • 25 كم', style: TextStyle(fontWeight: FontWeight.w600))),
+      Row(children: [Expanded(child: Text('الموقع: $city • $radius كم', style: const TextStyle(fontWeight: FontWeight.w600))), TextButton.icon(onPressed: changeLocation, icon: const Icon(Icons.map_outlined), label: const Text('تغيير الموقع'))]),
       Row(children: [
         Expanded(child: DropdownButtonFormField<String?>(value: category, decoration: const InputDecoration(labelText: 'القسم'), items: [const DropdownMenuItem<String?>(value: null, child: Text('كل الأقسام')), ...marketCategories.map((x) => DropdownMenuItem<String?>(value: x.id, child: Text(x.name)))], onChanged: (v) => setState(() => category = v))),
         const SizedBox(width: 8), Expanded(child: TextField(decoration: const InputDecoration(labelText: 'المدينة'), onChanged: (v) => setState(() => city = v))),
@@ -223,7 +240,7 @@ class _MarketHomeState extends State<MarketHome> {
       final x = rows[i], cat = MarketCategory.byId(x.category);
       return Card(child: ListTile(
         contentPadding: const EdgeInsets.all(8), leading: SizedBox(width: 76, height: 76, child: x.photos.isEmpty ? Center(child: Text(cat.emoji, style: const TextStyle(fontSize: 30))) : Image.network(x.photos.first, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Center(child: Text(cat.emoji)))),
-        title: Text(x.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900)),
+        title: Row(children: [Expanded(child: Text(x.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900))), IconButton(visualDensity: VisualDensity.compact, onPressed: () => speak(x.title + '. ' + x.description), icon: const Icon(Icons.volume_up, size: 18), tooltip: 'استمع')]),
         subtitle: Text(x.priceLabel + '\n' + x.location, style: const TextStyle(color: green, fontWeight: FontWeight.bold)),
         trailing: IconButton(onPressed: () => toggle(x.id), icon: Icon(fav.contains(x.id) ? Icons.favorite : Icons.favorite_border, color: fav.contains(x.id) ? Colors.red : null)),
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AdDetailPage(ad: x, favorite: fav.contains(x.id), onFavorite: () => toggle(x.id)))),
@@ -291,10 +308,21 @@ class _AdDetailPageState extends State<AdDetailPage> {
 class AddAdPage extends StatefulWidget { const AddAdPage({super.key}); @override State<AddAdPage> createState() => _AddAdPageState(); }
 class _AddAdPageState extends State<AddAdPage> {
   final picker = ImagePicker();
+  final voice = stt.SpeechToText();
+  bool recording = false;
   final title = TextEditingController(), desc = TextEditingController(), city = TextEditingController(), district = TextEditingController(), phone = TextEditingController(), price = TextEditingController();
   final List<XFile> photos = [];
   String category = 'houses', currency = 'SYP'; bool busy = false;
-  @override void dispose() { title.dispose(); desc.dispose(); city.dispose(); district.dispose(); phone.dispose(); price.dispose(); super.dispose(); }
+  @override void dispose() { voice.stop(); title.dispose(); desc.dispose(); city.dispose(); district.dispose(); phone.dispose(); price.dispose(); super.dispose(); }
+  Future<void> dictateDescription() async {
+    try {
+      final ok = await voice.initialize(onStatus: (v) { if (mounted) setState(() => recording = v == 'listening'); }, onError: (_) { if (mounted) setState(() => recording = false); });
+      if (!mounted) return;
+      if (!ok) { msg('التعرف الصوتي غير متاح على هذا الجهاز'); return; }
+      setState(() => recording = true);
+      await voice.listen(localeId: 'ar_SA', onResult: (r) { if (!mounted) return; desc.text = r.recognizedWords; setState(() {}); });
+    } catch (_) { if (mounted) { setState(() => recording = false); msg('تعذر تشغيل الميكروفون'); } }
+  }
   void msg(String s) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s)));
   Future<void> album() async { try { final p = await picker.pickMultiImage(imageQuality: 92, maxWidth: 2400, maxHeight: 2400); if (mounted) setState(() => photos.addAll(p.take(8 - photos.length))); } catch (e) { msg(e.toString()); } }
   Future<void> camera() async { try { final p = await picker.pickImage(source: ImageSource.camera, imageQuality: 92, maxWidth: 2400, maxHeight: 2400); if (p != null && mounted && photos.length < 8) setState(() => photos.add(p)); } catch (e) { msg(e.toString()); } }
@@ -318,6 +346,7 @@ class _AddAdPageState extends State<AddAdPage> {
     DropdownButtonFormField<String>(value: category, decoration: const InputDecoration(labelText: 'القسم'), items: marketCategories.map((x) => DropdownMenuItem(value: x.id, child: Text(x.name))).toList(), onChanged: (v) => setState(() => category = v ?? 'houses')),
     TextField(controller: title, decoration: const InputDecoration(labelText: 'عنوان الإعلان')),
     TextField(controller: desc, maxLines: 4, decoration: const InputDecoration(labelText: 'التفاصيل')),
+    OutlinedButton.icon(onPressed: dictateDescription, icon: Icon(recording ? Icons.mic : Icons.mic_none), label: Text(recording ? 'يتم الاستماع...' : 'أضف إعلانك بالصوت - تحدث لوصف الإعلان')),
     Row(children: [Expanded(child: TextField(controller: city, decoration: const InputDecoration(labelText: 'المدينة'))), IconButton(onPressed: map, icon: const Icon(Icons.map))]),
     TextField(controller: district, decoration: const InputDecoration(labelText: 'الحي')),
     TextField(controller: phone, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'رقم الهاتف (اختياري)')),
@@ -328,7 +357,19 @@ class _AddAdPageState extends State<AddAdPage> {
 
 class MapPage extends StatefulWidget { const MapPage({super.key}); @override State<MapPage> createState() => _MapPageState(); }
 class _MapPageState extends State<MapPage> {
-  LatLng point = const LatLng(33.5138, 36.2765); String city = 'دمشق', district = ''; bool busy = false;
+  LatLng point = const LatLng(51.3127, 9.4797); String city = 'كاسل، ألمانيا', district = ''; bool busy = false; double radius = 25;
+  final placeSearch = TextEditingController();
+  @override void dispose() { placeSearch.dispose(); super.dispose(); }
+  Future<void> searchPlace() async {
+    final q = placeSearch.text.trim(); if (q.isEmpty) return;
+    setState(() => busy = true);
+    try {
+      final u = Uri.https('nominatim.openstreetmap.org', '/search', {'format':'jsonv2','q':q,'limit':'1','addressdetails':'1','accept-language':'ar'});
+      final r = await http.get(u, headers: {'User-Agent':'JandaliArabMarket/1.0'});
+      if (r.statusCode == 200) { final rows = jsonDecode(r.body) as List; if (rows.isNotEmpty) { final a = rows.first as Map<String,dynamic>; point = LatLng(double.parse(a['lat'].toString()),double.parse(a['lon'].toString())); final ad = (a['address'] ?? {}) as Map<String,dynamic>; city = (ad['city'] ?? ad['town'] ?? ad['village'] ?? a['display_name'] ?? q).toString(); district = (ad['suburb'] ?? ad['neighbourhood'] ?? '').toString(); } else if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('لم نجد المكان، اكتب المدينة مع الدولة'))); }
+    } catch (_) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تعذر البحث عن الموقع الآن'))); }
+    finally { if (mounted) setState(() => busy = false); }
+  }
   Future<void> locate() async {
     try { var p = await Geolocator.checkPermission(); if (p == LocationPermission.denied) p = await Geolocator.requestPermission(); if (p == LocationPermission.denied || p == LocationPermission.deniedForever) throw Exception('اسمح بالوصول للموقع'); final pos = await Geolocator.getCurrentPosition(); point = LatLng(pos.latitude, pos.longitude); await reverse(point); }
     catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()))); }
@@ -346,10 +387,11 @@ class _MapPageState extends State<MapPage> {
       TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.jandali.market'),
       MarkerLayer(markers: [Marker(point: point, width: 44, height: 44, child: const Icon(Icons.location_pin, color: Colors.red, size: 42))]),
     ]),
-    Positioned(top: 12, left: 12, child: FloatingActionButton.small(onPressed: locate, child: const Icon(Icons.my_location))),
+    Positioned(top: 12, left: 12, right: 12, child: Card(child: Padding(padding: const EdgeInsets.all(8), child: Row(children: [Expanded(child: TextField(controller: placeSearch, decoration: const InputDecoration(hintText: 'اكتب مدينة وبلداً، مثل كاسل، ألمانيا', isDense: true), onSubmitted: (_) => searchPlace())), IconButton(onPressed: busy ? null : searchPlace, icon: const Icon(Icons.search)), IconButton(onPressed: locate, icon: const Icon(Icons.my_location))])))),
     Positioned(bottom: 16, left: 12, right: 12, child: Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(mainAxisSize: MainAxisSize.min, children: [
       Text(busy ? 'جارٍ تحديد العنوان...' : city + ' ' + district, style: const TextStyle(fontWeight: FontWeight.bold)),
-      FilledButton(onPressed: busy ? null : () => Navigator.pop(context, {'city': city, 'district': district}), child: const Text('تأكيد الموقع')),
+      Row(children: [const Text('نطاق البحث'), Expanded(child: Slider(value: radius, min: 1, max: 50, divisions: 49, label: '${radius.round()} كم', onChanged: (v) => setState(() => radius = v))), Text('${radius.round()} كم')]),
+      FilledButton(onPressed: busy ? null : () => Navigator.pop(context, {'city': city, 'district': district, 'radius': radius.round().toString()}), child: const Text('تأكيد الموقع')),
     ])))),
   ]));
 }
