@@ -705,7 +705,7 @@ class _AddAdPageState extends State<AddAdPage> {
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         itemCount: marketCategories.length,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisExtent: 226, crossAxisSpacing: 10, mainAxisSpacing: 10),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisExtent: 230, crossAxisSpacing: 10, mainAxisSpacing: 10),
         itemBuilder: (c, i) {
           final x = marketCategories[i];
           final tones = [const Color(0xFFFFF1E8), const Color(0xFFEAF5EC), const Color(0xFFFFF8DF), const Color(0xFFEAF1FF), const Color(0xFFFFEDF1), const Color(0xFFEAF8F8)];
