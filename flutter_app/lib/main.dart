@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -190,46 +189,273 @@ class _MarketHomeState extends State<MarketHome> {
   Widget build(BuildContext context) {
     final pages = [homePage(), searchPage(), favoritesPage(), chatsPage(), accountPage()];
     return Scaffold(
-      appBar: AppBar(title: const Text('السوق العربي | Arab Market', style: TextStyle(fontWeight: FontWeight.w900)), actions: [IconButton(onPressed: load, icon: const Icon(Icons.refresh))]),
-      body: IndexedStack(index: tab, children: pages),
-      floatingActionButton: FloatingActionButton.extended(onPressed: () => add(), backgroundColor: green, foregroundColor: Colors.white, icon: const Icon(Icons.add), label: const Text('أضف إعلاناً')),
-      bottomNavigationBar: NavigationBar(selectedIndex: tab, onDestinationSelected: (v) => setState(() => tab = v), destinations: [
-        NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'الرئيسية'),
-        NavigationDestination(icon: Icon(Icons.search), label: 'بحث'),
-        NavigationDestination(icon: Icon(Icons.favorite_border), selectedIcon: Icon(Icons.favorite), label: fav.isEmpty ? 'المفضلة' : 'المفضلة (${fav.length})'),
-        NavigationDestination(icon: Icon(Icons.chat_bubble_outline), label: 'الرسائل'),
-        NavigationDestination(icon: Icon(Icons.person_outline), label: 'حسابي'),
-      ]),
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Column(
+          children: [
+            _topHeader(),
+            _searchHeader(),
+            _locationHeader(),
+            Expanded(child: IndexedStack(index: tab, children: pages)),
+          ],
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          height: 68,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(top: BorderSide(color: Color(0xFFE8E8E8))),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
+          child: Row(
+            textDirection: TextDirection.ltr,
+            children: [
+              _navItem('حسابي', Icons.person_outline, 4),
+              _navItem('الرسائل', Icons.chat_bubble_outline, 3),
+              Expanded(
+                child: InkWell(
+                  onTap: () => add(),
+                  borderRadius: BorderRadius.circular(14),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 39,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEAF5EC),
+                          border: Border.all(color: green, width: 1.6),
+                          borderRadius: BorderRadius.circular(13),
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.add, color: green, size: 22),
+                            Icon(Icons.mic, color: green, size: 17),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text('أضف إعلانك', maxLines: 1, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: green)),
+                      const Text('بالصوت', maxLines: 1, style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.black54)),
+                    ],
+                  ),
+                ),
+              ),
+              _navItem('المفضلة', Icons.favorite_border, 2, activeLabel: fav.isEmpty ? 'المفضلة' : 'المفضلة ${fav.length}'),
+              _navItem('بحث', Icons.search, 0),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
-  Widget homePage() => RefreshIndicator(onRefresh: load, child: ListView(padding: const EdgeInsets.all(13), children: [
-    Container(padding: const EdgeInsets.all(18), decoration: BoxDecoration(color: green, borderRadius: BorderRadius.circular(18)), child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('السوق العربي', style: TextStyle(color: Colors.white, fontSize: 25, fontWeight: FontWeight.w900)),
-      Text('بيع وشراء مجاني بين الناس', style: TextStyle(color: Colors.white)),
-    ])),
-    const SizedBox(height: 12),
-    Row(children: [Expanded(child: FilledButton.icon(onPressed: () => add(), icon: const Icon(Icons.add), label: const Text('أضف إعلاناً'))), const SizedBox(width: 8), Expanded(child: OutlinedButton.icon(onPressed: () => add(byVoice: true), icon: const Icon(Icons.mic), label: const Text('أضف إعلاناً بالصوت')))]),
-    const SizedBox(height: 15), const Text('الأقسام', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 19)),
-    GridView.builder(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), itemCount: marketCategories.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, childAspectRatio: 1.08, crossAxisSpacing: 7, mainAxisSpacing: 7),
-      itemBuilder: (c, i) { final x = marketCategories[i]; return InkWell(onTap: () => setState(() { category = x.id; tab = 1; }), child: Container(decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Text(x.emoji, style: const TextStyle(fontSize: 28)), Text(x.name, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)), IconButton(visualDensity: VisualDensity.compact, onPressed: () => speak(x.name + '. ' + x.subtitle), icon: const Icon(Icons.volume_up, size: 17), tooltip: 'استمع')]))); }),
-    const SizedBox(height: 14), const Text('أحدث الإعلانات', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 19)),
-    feed(ads.take(15).toList()),
-  ]));
+  Widget _topHeader() => Container(
+    width: double.infinity,
+    color: Colors.white,
+    padding: const EdgeInsets.fromLTRB(13, 9, 13, 7),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('السوق العربي', maxLines: 1, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF202020))),
+        const Text('Arab Market By Hicham Jandali', maxLines: 1, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.black54)),
+        const SizedBox(height: 7),
+        Row(
+          children: [
+            _statusChip('المفضلة: ${fav.length}', Colors.black87),
+            const SizedBox(width: 5),
+            _statusChip('مباشر الآن', green),
+            const SizedBox(width: 5),
+            _statusChip('سوريا • 3', green),
+          ],
+        ),
+      ],
+    ),
+  );
 
-  Widget searchPage() => Column(children: [
-    Padding(padding: const EdgeInsets.all(12), child: Column(children: [
-      TextField(controller: searchBox, onChanged: (v) => setState(() => search = v), decoration: InputDecoration(prefixIcon: const Icon(Icons.search), suffixIcon: IconButton(onPressed: voiceSearch, icon: Icon(listening ? Icons.mic : Icons.mic_none, color: listening ? Colors.red : null), tooltip: 'بحث صوتي'), hintText: 'ابحث عن سلعة أو خدمة', filled: true, fillColor: Colors.white)),
-      Row(children: [Expanded(child: Text('الموقع: $selectedLocation • $radius كم', style: const TextStyle(fontWeight: FontWeight.w600))), TextButton.icon(onPressed: changeLocation, icon: const Icon(Icons.map_outlined), label: const Text('تغيير الموقع'))]),
-      Row(children: [
-        Expanded(child: DropdownButtonFormField<String?>(value: category, decoration: const InputDecoration(labelText: 'القسم'), items: [const DropdownMenuItem<String?>(value: null, child: Text('كل الأقسام')), ...marketCategories.map((x) => DropdownMenuItem<String?>(value: x.id, child: Text(x.name)))], onChanged: (v) => setState(() => category = v))),
-        const SizedBox(width: 8), Expanded(child: TextField(decoration: const InputDecoration(labelText: 'المدينة'), onChanged: (v) => setState(() => city = v))),
-      ]),
-      TextButton(onPressed: () => setState(() { category = null; city = ''; search = ''; selectedLocation = 'كاسل، ألمانيا'; radius = '25'; searchBox.clear(); }), child: const Text('مسح الفلاتر')),
-    ])),
-    Expanded(child: feed(results)),
-  ]);
+  Widget _statusChip(String label, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+    decoration: BoxDecoration(color: color == green ? const Color(0xFFEAF5EC) : const Color(0xFFF4F4F4), borderRadius: BorderRadius.circular(20)),
+    child: Text(label, maxLines: 1, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: color)),
+  );
+
+  Widget _searchHeader() => Padding(
+    padding: const EdgeInsets.fromLTRB(12, 2, 12, 7),
+    child: TextField(
+      controller: searchBox,
+      textDirection: TextDirection.rtl,
+      onChanged: (v) => setState(() => search = v),
+      decoration: InputDecoration(
+        hintText: 'عن ماذا تبحث؟ سيارة، بيت، عمل...',
+        hintStyle: const TextStyle(fontSize: 13, color: Colors.black45),
+        prefixIcon: const Icon(Icons.search, color: Colors.black45),
+        suffixIcon: IconButton(
+          onPressed: voiceSearch,
+          tooltip: 'بحث صوتي',
+          icon: Icon(Icons.mic, color: listening ? Colors.red : green, size: 25),
+        ),
+        filled: true,
+        fillColor: const Color(0xFFF8F8F8),
+        contentPadding: const EdgeInsets.symmetric(vertical: 12),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFFE8E8E8))),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: green, width: 1.5)),
+      ),
+    ),
+  );
+
+  Widget _locationHeader() => InkWell(
+    onTap: changeLocation,
+    child: Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+      decoration: BoxDecoration(color: const Color(0xFFEAF5EC), borderRadius: BorderRadius.circular(12), border: Border.all(color: green.withOpacity(0.25))),
+      child: Row(
+        children: [
+          const Icon(Icons.location_on_outlined, color: green, size: 18),
+          const SizedBox(width: 5),
+          Expanded(child: Text('منطقة البحث: $selectedLocation • $radius كم', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF286C3D)))),
+          const SizedBox(width: 5),
+          const Text('تغيير الموقع', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: green)),
+        ],
+      ),
+    ),
+  );
+
+  Widget _navItem(String label, IconData icon, int target, {String? activeLabel}) => Expanded(
+    child: InkWell(
+      onTap: () => setState(() => tab = target),
+      borderRadius: BorderRadius.circular(12),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 22, color: tab == target ? green : Colors.black45),
+          const SizedBox(height: 3),
+          Text(activeLabel ?? label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 9, fontWeight: tab == target ? FontWeight.w900 : FontWeight.w700, color: tab == target ? green : Colors.black54)),
+        ],
+      ),
+    ),
+  );
+
+  Widget homePage() => RefreshIndicator(
+    onRefresh: load,
+    child: ListView(
+      padding: const EdgeInsets.fromLTRB(12, 5, 12, 18),
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('كل الأقسام • اضغط على الصورة', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+            Text('${marketCategories.length} قسم', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black45)),
+          ],
+        ),
+        const SizedBox(height: 10),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: marketCategories.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            mainAxisExtent: 190,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+          ),
+          itemBuilder: (c, i) {
+            final x = marketCategories[i];
+            final count = ads.where((a) => a.category == x.id).length;
+            final tones = [
+              const Color(0xFFFFF1E8), const Color(0xFFEAF5EC),
+              const Color(0xFFFFF8DF), const Color(0xFFEAF1FF),
+              const Color(0xFFFFEDF1), const Color(0xFFEAF8F8),
+            ];
+            return InkWell(
+              onTap: () => setState(() { category = x.id; tab = 1; }),
+              borderRadius: BorderRadius.circular(17),
+              child: Container(
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(17), border: Border.all(color: const Color(0xFFEAEAEA)), boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 7, offset: Offset(0, 2))]),
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(
+                      height: 88,
+                      color: tones[i % tones.length],
+                      alignment: Alignment.center,
+                      child: Text(x.emoji, style: const TextStyle(fontSize: 48)),
+                    ),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(9, 7, 9, 5),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(x.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900)),
+                            const SizedBox(height: 2),
+                            Expanded(child: Text(x.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, color: Colors.black54, height: 1.15))),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text('$count إعلان', style: const TextStyle(fontSize: 9, color: Colors.black45, fontWeight: FontWeight.bold)),
+                                InkWell(onTap: () => speak('${x.name}. ${x.subtitle}'), child: const Padding(padding: EdgeInsets.symmetric(horizontal: 3, vertical: 2), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.volume_up, size: 13, color: green), SizedBox(width: 2), Text('استماع', style: TextStyle(fontSize: 9, color: green, fontWeight: FontWeight.w900))]))),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 17),
+        const Text('أحدث الإعلانات', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17)),
+        const SizedBox(height: 7),
+        feed(ads.take(15).toList()),
+      ],
+    ),
+  );
+
+  Widget searchPage() => Column(
+    children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(12, 3, 12, 9),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String?>(
+                    value: category,
+                    decoration: const InputDecoration(labelText: 'القسم', isDense: true, border: OutlineInputBorder()),
+                    items: [
+                      const DropdownMenuItem<String?>(value: null, child: Text('كل الأقسام')),
+                      ...marketCategories.map((x) => DropdownMenuItem<String?>(value: x.id, child: Text(x.name))),
+                    ],
+                    onChanged: (v) => setState(() => category = v),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(child: TextField(decoration: const InputDecoration(labelText: 'المدينة', isDense: true, border: OutlineInputBorder()), onChanged: (v) => setState(() => city = v))),
+              ],
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: () => setState(() { category = null; city = ''; search = ''; searchBox.clear(); }),
+                child: const Text('مسح الفلاتر'),
+              ),
+            ),
+          ],
+        ),
+      ),
+      Expanded(child: feed(results)),
+    ],
+  );
 
   Widget favoritesPage() {
     final rows = ads.where((x) => fav.contains(x.id)).toList();
@@ -308,67 +534,69 @@ class _AdDetailPageState extends State<AdDetailPage> {
   }
 }
 
-class AddAdPage extends StatefulWidget { final bool voiceFirst; const AddAdPage({super.key, this.voiceFirst = false}); @override State<AddAdPage> createState() => _AddAdPageState(); }
+class AddAdPage extends StatefulWidget {
+  final bool voiceFirst;
+  const AddAdPage({super.key, this.voiceFirst = false});
+  @override
+  State<AddAdPage> createState() => _AddAdPageState();
+}
+
 class _AddAdPageState extends State<AddAdPage> {
   final picker = ImagePicker();
   final voice = stt.SpeechToText();
   bool recording = false;
+  bool categorySelected = false;
   final title = TextEditingController(), desc = TextEditingController(), city = TextEditingController(), district = TextEditingController(), phone = TextEditingController(), price = TextEditingController();
   final List<XFile> photos = [];
-  String category = 'houses', currency = 'SYP'; bool busy = false;
-  @override void initState() { super.initState(); if (widget.voiceFirst) WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) dictateDescription(); }); }
-  @override void dispose() { voice.stop(); title.dispose(); desc.dispose(); city.dispose(); district.dispose(); phone.dispose(); price.dispose(); super.dispose(); }
+  final Map<String, Uint8List> previewCache = {};
+  final Map<String, ({Uint8List bytes, String name})> uploadCache = {};
+  String category = 'houses', currency = 'SYP';
+  bool busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.voiceFirst) {
+      WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) dictateDescription(); });
+    }
+  }
+
+  @override
+  void dispose() {
+    voice.stop();
+    title.dispose(); desc.dispose(); city.dispose(); district.dispose(); phone.dispose(); price.dispose();
+    super.dispose();
+  }
+
   Future<void> dictateDescription() async {
     try {
-      final ok = await voice.initialize(onStatus: (v) { if (mounted) setState(() => recording = v == 'listening'); }, onError: (_) { if (mounted) setState(() => recording = false); });
+      final ok = await voice.initialize(
+        onStatus: (v) { if (mounted) setState(() => recording = v == 'listening'); },
+        onError: (_) { if (mounted) setState(() => recording = false); },
+      );
       if (!mounted) return;
       if (!ok) { msg('التعرف الصوتي غير متاح على هذا الجهاز'); return; }
       setState(() => recording = true);
       await voice.listen(localeId: 'ar_SA', onResult: (r) { if (!mounted) return; desc.text = r.recognizedWords; setState(() {}); });
-    } catch (_) { if (mounted) { setState(() => recording = false); msg('تعذر تشغيل الميكروفون'); } }
-  }
-  void msg(String s) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s)));
-  // Keep original XFile bytes; never decode HEIC in Dart.
-  Future<void> album() async {
-    try {
-      final selected = await picker.pickMultiImage();
-      if (!mounted || selected.isEmpty) return;
-      setState(() => photos.addAll(selected.take(8 - photos.length)));
     } catch (_) {
-      if (mounted) msg('تعذر اختيار الصور من الألبوم، حاول مرة أخرى');
-    }
-  }
-  Future<void> camera() async {
-    try {
-      final photo = await picker.pickImage(source: ImageSource.camera);
-      if (photo != null && mounted && photos.length < 8) {
-        setState(() => photos.add(photo));
-      } else if (mounted && photo != null) {
-        msg('الحد الأقصى 8 صور');
-      }
-    } catch (_) {
-      if (mounted) msg('تعذر التقاط الصورة، حاول مرة أخرى');
+      if (mounted) { setState(() => recording = false); msg('تعذر تشغيل الميكروفون'); }
     }
   }
 
+  void msg(String s) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s)));
+
   bool _isHeic(XFile photo, Uint8List bytes) {
     final name = photo.name.toLowerCase();
-    if (name.contains('heic') || name.contains('heif')) return true;
+    if (name.endsWith('.heic') || name.endsWith('.heif') || name.startsWith('heic.') || name.startsWith('heif.') || name.contains('.heic.') || name.contains('.heif.')) return true;
     if (bytes.length < 12) return false;
     final signature = String.fromCharCodes(bytes.sublist(4, 12)).toLowerCase();
-    return signature.contains('heic') || signature.contains('heif') ||
-        signature.contains('heix') || signature.contains('hevc') ||
-        signature.contains('mif1') || signature.contains('msf1');
+    return signature.contains('heic') || signature.contains('heif') || signature.contains('heix') || signature.contains('hevc') || signature.contains('mif1') || signature.contains('msf1');
   }
 
   Future<({Uint8List bytes, String name})> _photoUploadData(XFile photo) async {
     final originalBytes = await photo.readAsBytes();
     if (!_isHeic(photo, originalBytes)) {
-      final lowerName = photo.name.toLowerCase();
-    final originalName = lowerName.endsWith('.heic') || lowerName.endsWith('.heif')
-        ? photo.name
-        : photo.name + '.heic';
-    return (bytes: originalBytes, name: originalName);
+      return (bytes: originalBytes, name: photo.name);
     }
     try {
       final compressed = await FlutterImageCompress.compressWithList(
@@ -384,41 +612,254 @@ class _AddAdPageState extends State<AddAdPage> {
         return (bytes: compressed, name: baseName + '_compressed.jpg');
       }
     } catch (_) {
-      // Compression failure is non-fatal: upload the original HEIC bytes.
+      // Compression is optional. Keep and upload the original HEIC bytes.
     }
     return (bytes: originalBytes, name: photo.name);
   }
-  Future<void> map() async { final r = await Navigator.push<Map<String, String>>(context, MaterialPageRoute(builder: (_) => const MapPage())); if (r != null) { city.text = r['city'] ?? ''; district.text = r['district'] ?? ''; setState(() {}); } }
+
+  Future<void> _cachePhoto(XFile photo) async {
+    final prepared = await _photoUploadData(photo);
+    uploadCache[photo.path] = prepared;
+    previewCache[photo.path] = prepared.bytes;
+  }
+
+  Future<void> album() async {
+    try {
+      final selected = await picker.pickMultiImage();
+      if (!mounted || selected.isEmpty) return;
+      final accepted = selected.take(8 - photos.length).toList();
+      final added = <XFile>[];
+      for (final photo in accepted) {
+        try { await _cachePhoto(photo); added.add(photo); } catch (_) {}
+      }
+      if (!mounted) return;
+      setState(() => photos.addAll(added));
+      if (added.length < accepted.length) msg('تعذر تجهيز إحدى الصور، يمكنك اختيارها مرة أخرى');
+      if (selected.length > accepted.length) msg('الحد الأقصى 8 صور');
+    } catch (_) {
+      if (mounted) msg('تعذر اختيار الصور من الألبوم، حاول مرة أخرى');
+    }
+  }
+
+  Future<void> camera() async {
+    try {
+      final photo = await picker.pickImage(source: ImageSource.camera);
+      if (photo == null || !mounted) return;
+      if (photos.length >= 8) { msg('الحد الأقصى 8 صور'); return; }
+      await _cachePhoto(photo);
+      if (mounted) setState(() => photos.add(photo));
+    } catch (_) {
+      if (mounted) msg('تعذر التقاط الصورة، حاول مرة أخرى');
+    }
+  }
+
+  Future<void> map() async {
+    final r = await Navigator.push<Map<String, String>>(context, MaterialPageRoute(builder: (_) => const MapPage()));
+    if (r != null) { city.text = r['city'] ?? ''; district.text = r['district'] ?? ''; setState(() {}); }
+  }
+
   Future<void> publish() async {
     if (photos.isEmpty) { msg('أضف صورة واحدة على الأقل'); return; }
     setState(() => busy = true);
     try {
       final bytes = <Uint8List>[], names = <String>[];
       for (final photo in photos) {
-        final prepared = await _photoUploadData(photo);
+        final prepared = uploadCache[photo.path] ?? await _photoUploadData(photo);
         bytes.add(prepared.bytes);
         names.add(prepared.name);
       }
-      await MarketService.instance.publish(title: title.text, description: desc.text, category: category, city: city.text, district: district.text, phone: phone.text, price: category == 'free' ? 0 : num.tryParse(price.text), currency: currency, photoBytes: bytes, photoNames: names);
+      await MarketService.instance.publish(
+        title: title.text,
+        description: desc.text,
+        category: category,
+        city: city.text,
+        district: district.text,
+        phone: phone.text,
+        price: category == 'free' ? 0 : num.tryParse(price.text),
+        currency: currency,
+        photoBytes: bytes,
+        photoNames: names,
+      );
       if (mounted) Navigator.pop(context, true);
-    } catch (_) { msg('تعذر نشر الإعلان أو رفع الصور الآن، أعد المحاولة من فضلك'); }
-    finally { if (mounted) setState(() => busy = false); }
+    } catch (_) {
+      msg('تعذر نشر الإعلان أو رفع الصور الآن، أعد المحاولة من فضلك');
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
   }
-  @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('إضافة إعلان')), body: ListView(padding: const EdgeInsets.all(13), children: [
-    Text('الصور (${photos.length}/8) - الصورة الأولى هي الغلاف', style: const TextStyle(fontWeight: FontWeight.bold)),
-    Container(height: 240, color: Colors.black, alignment: Alignment.center, child: photos.isEmpty ? const Text('اختر الصور', style: TextStyle(color: Colors.white)) : Image.file(File(photos.first.path), fit: BoxFit.contain)),
-    if (photos.isNotEmpty) SizedBox(height: 92, child: ReorderableListView(scrollDirection: Axis.horizontal, onReorder: (a, b) { setState(() { if (b > a) b--; final p = photos.removeAt(a); photos.insert(b, p); }); }, children: [for (var i = 0; i < photos.length; i++) Container(key: ValueKey(photos[i].path), width: 80, margin: const EdgeInsets.all(4), child: Stack(fit: StackFit.expand, children: [GestureDetector(onTap: () => setState(() { final p = photos.removeAt(i); photos.insert(0, p); }), child: Image.file(File(photos[i].path), fit: BoxFit.cover)), Positioned(right: 0, top: 0, child: IconButton(onPressed: () => setState(() => photos.removeAt(i)), icon: const Icon(Icons.close, color: Colors.red)))]))])),
-    Row(children: [Expanded(child: OutlinedButton.icon(onPressed: album, icon: const Icon(Icons.photo_library), label: const Text('الألبوم'))), Expanded(child: FilledButton.icon(onPressed: camera, icon: const Icon(Icons.camera_alt), label: const Text('الكاميرا')))]),
-    DropdownButtonFormField<String>(value: category, decoration: const InputDecoration(labelText: 'القسم'), items: marketCategories.map((x) => DropdownMenuItem(value: x.id, child: Text(x.name))).toList(), onChanged: (v) => setState(() => category = v ?? 'houses')),
-    TextField(controller: title, decoration: const InputDecoration(labelText: 'عنوان الإعلان')),
-    TextField(controller: desc, maxLines: 4, decoration: const InputDecoration(labelText: 'التفاصيل')),
-    OutlinedButton.icon(onPressed: dictateDescription, icon: Icon(recording ? Icons.mic : Icons.mic_none), label: Text(recording ? 'يتم الاستماع...' : 'أضف إعلانك بالصوت - تحدث لوصف الإعلان')),
-    Row(children: [Expanded(child: TextField(controller: city, decoration: const InputDecoration(labelText: 'المدينة'))), IconButton(onPressed: map, icon: const Icon(Icons.map))]),
-    TextField(controller: district, decoration: const InputDecoration(labelText: 'الحي')),
-    TextField(controller: phone, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'رقم الهاتف (اختياري)')),
-    if (category != 'free') Row(children: [Expanded(child: TextField(controller: price, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'السعر'))), DropdownButton<String>(value: currency, items: const [DropdownMenuItem(value: 'SYP', child: Text('ل.س')), DropdownMenuItem(value: 'USD', child: Text('USD'))], onChanged: (v) => setState(() => currency = v ?? 'SYP'))]),
-    const SizedBox(height: 12), FilledButton(onPressed: busy ? null : publish, child: Text(busy ? 'جارٍ النشر...' : 'نشر الإعلان')),
-  ]));
+
+  Widget _categoryPicker() => ListView(
+    padding: const EdgeInsets.fromLTRB(12, 12, 12, 22),
+    children: [
+      const Text('ماذا تريد أن تعرض؟', textAlign: TextAlign.center, style: TextStyle(fontSize: 21, fontWeight: FontWeight.w900)),
+      const SizedBox(height: 5),
+      const Text('اختر القسم بصورة كبيرة، سنجهز لك نموذج مخصص مع حقول وصف المنتج، السعر، المكان', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Colors.black54, height: 1.35)),
+      const SizedBox(height: 14),
+      GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: marketCategories.length,
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisExtent: 226, crossAxisSpacing: 10, mainAxisSpacing: 10),
+        itemBuilder: (c, i) {
+          final x = marketCategories[i];
+          final tones = [const Color(0xFFFFF1E8), const Color(0xFFEAF5EC), const Color(0xFFFFF8DF), const Color(0xFFEAF1FF), const Color(0xFFFFEDF1), const Color(0xFFEAF8F8)];
+          return InkWell(
+            onTap: () => setState(() { category = x.id; categorySelected = true; }),
+            borderRadius: BorderRadius.circular(18),
+            child: Container(
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: const Color(0xFFE8E8E8))),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(height: 91, color: tones[i % tones.length], alignment: Alignment.center, child: Text(x.emoji, style: const TextStyle(fontSize: 49))),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(10, 8, 10, 7),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(x.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900)),
+                          Text(x.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, color: Colors.black54, height: 1.2)),
+                          const Row(
+                            children: [
+                              Icon(Icons.photo_camera_outlined, size: 13, color: green),
+                              SizedBox(width: 3),
+                              Text('أضف ٤ صور', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: green)),
+                              SizedBox(width: 4),
+                              Text('• المكان', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.black45)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    ],
+  );
+
+  Widget _photoPreview() => Column(
+    children: [
+      Container(
+        height: 235,
+        width: double.infinity,
+        decoration: const BoxDecoration(color: Color(0xFFF3F3F3)),
+        alignment: Alignment.center,
+        child: photos.isEmpty
+            ? const Text('اختر صور الإعلان', style: TextStyle(color: Colors.black45))
+            : Image.memory(
+                previewCache[photos.first.path] ?? Uint8List(0),
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported_outlined, size: 55, color: Colors.black26),
+              ),
+      ),
+      if (photos.isNotEmpty)
+        SizedBox(
+          height: 91,
+          child: ReorderableListView(
+            scrollDirection: Axis.horizontal,
+            onReorder: (a, b) {
+              setState(() {
+                if (b > a) b--;
+                final p = photos.removeAt(a);
+                photos.insert(b, p);
+              });
+            },
+            children: [
+              for (var i = 0; i < photos.length; i++)
+                Container(
+                  key: ValueKey(photos[i].path),
+                  width: 82,
+                  margin: const EdgeInsets.all(4),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      GestureDetector(
+                        onTap: () => setState(() { final p = photos.removeAt(i); photos.insert(0, p); }),
+                        child: Image.memory(
+                          previewCache[photos[i].path] ?? Uint8List(0),
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFEAEAEA), child: Icon(Icons.image_not_supported_outlined, color: Colors.black38)),
+                        ),
+                      ),
+                      Positioned(right: 0, top: 0, child: IconButton(padding: EdgeInsets.zero, onPressed: () => setState(() { final removed = photos.removeAt(i); previewCache.remove(removed.path); uploadCache.remove(removed.path); }), icon: const Icon(Icons.close, color: Colors.red, size: 20))),
+                      Positioned(left: 3, bottom: 3, child: Container(padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2), decoration: BoxDecoration(color: i == 0 ? green : Colors.black54, borderRadius: BorderRadius.circular(8)), child: Text(i == 0 ? 'الغلاف' : '${i + 1}', style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)))),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+    ],
+  );
+
+  Widget _formPage() => ListView(
+    padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
+    children: [
+      Row(
+        children: [
+          Container(width: 48, height: 48, alignment: Alignment.center, decoration: BoxDecoration(color: const Color(0xFFEAF5EC), borderRadius: BorderRadius.circular(13)), child: Text(MarketCategory.byId(category).emoji, style: const TextStyle(fontSize: 27))),
+          const SizedBox(width: 9),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(MarketCategory.byId(category).name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900)),
+            Text(MarketCategory.byId(category).subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, color: Colors.black54)),
+          ])),
+          TextButton(onPressed: () => setState(() => categorySelected = false), child: const Text('تغيير')),
+        ],
+      ),
+      const SizedBox(height: 9),
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text('الصور (${photos.length}/8) • الأولى هي الغلاف', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900)),
+          const Text('حتى ٨ صور', style: TextStyle(fontSize: 10, color: Colors.black45)),
+        ],
+      ),
+      const SizedBox(height: 6),
+      _photoPreview(),
+      const SizedBox(height: 8),
+      Row(
+        children: [
+          Expanded(child: OutlinedButton.icon(onPressed: album, icon: const Icon(Icons.photo_library_outlined), label: const Text('الألبوم'))),
+          const SizedBox(width: 8),
+          Expanded(child: FilledButton.icon(onPressed: camera, icon: const Icon(Icons.camera_alt_outlined), label: const Text('الكاميرا'))),
+        ],
+      ),
+      TextField(controller: title, decoration: const InputDecoration(labelText: 'عنوان الإعلان')),
+      TextField(controller: desc, maxLines: 4, decoration: const InputDecoration(labelText: 'التفاصيل والوصف')),
+      OutlinedButton.icon(onPressed: dictateDescription, icon: Icon(recording ? Icons.mic : Icons.mic_none, color: green), label: Text(recording ? 'يتم الاستماع...' : 'أضف إعلانك بالصوت - تحدث لوصف الإعلان')),
+      Row(
+        children: [
+          Expanded(child: TextField(controller: city, decoration: const InputDecoration(labelText: 'المدينة'))),
+          IconButton(onPressed: map, icon: const Icon(Icons.map_outlined, color: green)),
+        ],
+      ),
+      TextField(controller: district, decoration: const InputDecoration(labelText: 'الحي أو المنطقة')),
+      TextField(controller: phone, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'رقم الهاتف (اختياري)')),
+      if (category != 'free')
+        Row(
+          children: [
+            Expanded(child: TextField(controller: price, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'السعر'))),
+            DropdownButton<String>(value: currency, items: const [DropdownMenuItem(value: 'SYP', child: Text('ل.س')), DropdownMenuItem(value: 'USD', child: Text('USD'))], onChanged: (v) => setState(() => currency = v ?? 'SYP')),
+          ],
+        ),
+      const SizedBox(height: 13),
+      FilledButton(onPressed: busy ? null : publish, style: FilledButton.styleFrom(backgroundColor: green, minimumSize: const Size.fromHeight(48)), child: Text(busy ? 'جارٍ النشر...' : 'نشر الإعلان')),
+    ],
+  );
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: Colors.white,
+    appBar: AppBar(title: const Text('إضافة إعلان'), backgroundColor: Colors.white, foregroundColor: Colors.black, elevation: 0),
+    body: categorySelected ? _formPage() : _categoryPicker(),
+  );
 }
 
 class MapPage extends StatefulWidget { const MapPage({super.key}); @override State<MapPage> createState() => _MapPageState(); }
