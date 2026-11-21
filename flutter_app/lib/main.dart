@@ -328,14 +328,12 @@ class _AddAdPageState extends State<AddAdPage> {
     } catch (_) { if (mounted) { setState(() => recording = false); msg('تعذر تشغيل الميكروفون'); } }
   }
   void msg(String s) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s)));
-  // Keep the original XFile bytes: do not decode HEIC in Dart or ask image_picker to resize/re-encode.
+  // Keep original XFile bytes; never decode HEIC in Dart.
   Future<void> album() async {
     try {
       final selected = await picker.pickMultiImage();
       if (!mounted || selected.isEmpty) return;
-      setState(() {
-        photos.addAll(selected.take(8 - photos.length));
-      });
+      setState(() => photos.addAll(selected.take(8 - photos.length)));
     } catch (_) {
       if (mounted) msg('تعذر اختيار الصور من الألبوم، حاول مرة أخرى');
     }
@@ -364,14 +362,10 @@ class _AddAdPageState extends State<AddAdPage> {
   }
 
   Future<({Uint8List bytes, String name})> _photoUploadData(XFile photo) async {
-    // This is the same direct-byte path used by the successful photo test.
     final originalBytes = await photo.readAsBytes();
     if (!_isHeic(photo, originalBytes)) {
       return (bytes: originalBytes, name: photo.name);
     }
-
-    // Native compression is optional. If this device cannot decode/encode HEIC,
-    // upload the original HEIC bytes instead of failing the advertisement.
     try {
       final compressed = await FlutterImageCompress.compressWithList(
         originalBytes,
@@ -381,7 +375,15 @@ class _AddAdPageState extends State<AddAdPage> {
         format: CompressFormat.jpeg,
       );
       if (compressed.isNotEmpty) {
-        final baseName = photo.name.replaceAll(RegExp(r'\\.[^.]*
+        final dot = photo.name.lastIndexOf('.');
+        final baseName = dot > 0 ? photo.name.substring(0, dot) : photo.name;
+        return (bytes: compressed, name: baseName + '_compressed.jpg');
+      }
+    } catch (_) {
+      // Compression failure is non-fatal: upload the original HEIC bytes.
+    }
+    return (bytes: originalBytes, name: photo.name);
+  }
   Future<void> map() async { final r = await Navigator.push<Map<String, String>>(context, MaterialPageRoute(builder: (_) => const MapPage())); if (r != null) { city.text = r['city'] ?? ''; district.text = r['district'] ?? ''; setState(() {}); } }
   Future<void> publish() async {
     if (photos.isEmpty) { msg('أضف صورة واحدة على الأقل'); return; }
@@ -393,110 +395,6 @@ class _AddAdPageState extends State<AddAdPage> {
         bytes.add(prepared.bytes);
         names.add(prepared.name);
       }
-      await MarketService.instance.publish(title: title.text, description: desc.text, category: category, city: city.text, district: district.text, phone: phone.text, price: category == 'free' ? 0 : num.tryParse(price.text), currency: currency, photoBytes: bytes, photoNames: names);
-      if (mounted) Navigator.pop(context, true);
-    } catch (e) { msg('تعذر النشر: ' + e.toString()); }
-    finally { if (mounted) setState(() => busy = false); }
-  }
-  @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('إضافة إعلان')), body: ListView(padding: const EdgeInsets.all(13), children: [
-    const Text('الصورة الأولى هي الغلاف', style: TextStyle(fontWeight: FontWeight.bold)),
-    Container(height: 240, color: Colors.black, alignment: Alignment.center, child: photos.isEmpty ? const Text('اختر الصور', style: TextStyle(color: Colors.white)) : Image.file(File(photos.first.path), fit: BoxFit.contain)),
-    if (photos.isNotEmpty) SizedBox(height: 92, child: ReorderableListView(scrollDirection: Axis.horizontal, onReorder: (a, b) { setState(() { if (b > a) b--; final p = photos.removeAt(a); photos.insert(b, p); }); }, children: [for (var i = 0; i < photos.length; i++) Container(key: ValueKey(photos[i].path), width: 80, margin: const EdgeInsets.all(4), child: Stack(fit: StackFit.expand, children: [GestureDetector(onTap: () => setState(() { final p = photos.removeAt(i); photos.insert(0, p); }), child: Image.file(File(photos[i].path), fit: BoxFit.cover)), Positioned(right: 0, top: 0, child: IconButton(onPressed: () => setState(() => photos.removeAt(i)), icon: const Icon(Icons.close, color: Colors.red)))]))])),
-    Row(children: [Expanded(child: OutlinedButton.icon(onPressed: album, icon: const Icon(Icons.photo_library), label: const Text('الألبوم'))), Expanded(child: FilledButton.icon(onPressed: camera, icon: const Icon(Icons.camera_alt), label: const Text('الكاميرا')))]),
-    DropdownButtonFormField<String>(value: category, decoration: const InputDecoration(labelText: 'القسم'), items: marketCategories.map((x) => DropdownMenuItem(value: x.id, child: Text(x.name))).toList(), onChanged: (v) => setState(() => category = v ?? 'houses')),
-    TextField(controller: title, decoration: const InputDecoration(labelText: 'عنوان الإعلان')),
-    TextField(controller: desc, maxLines: 4, decoration: const InputDecoration(labelText: 'التفاصيل')),
-    OutlinedButton.icon(onPressed: dictateDescription, icon: Icon(recording ? Icons.mic : Icons.mic_none), label: Text(recording ? 'يتم الاستماع...' : 'أضف إعلانك بالصوت - تحدث لوصف الإعلان')),
-    Row(children: [Expanded(child: TextField(controller: city, decoration: const InputDecoration(labelText: 'المدينة'))), IconButton(onPressed: map, icon: const Icon(Icons.map))]),
-    TextField(controller: district, decoration: const InputDecoration(labelText: 'الحي')),
-    TextField(controller: phone, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'رقم الهاتف (اختياري)')),
-    if (category != 'free') Row(children: [Expanded(child: TextField(controller: price, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'السعر'))), DropdownButton<String>(value: currency, items: const [DropdownMenuItem(value: 'SYP', child: Text('ل.س')), DropdownMenuItem(value: 'USD', child: Text('USD'))], onChanged: (v) => setState(() => currency = v ?? 'SYP'))]),
-    const SizedBox(height: 12), FilledButton(onPressed: busy ? null : publish, child: Text(busy ? 'جارٍ النشر...' : 'نشر الإعلان')),
-  ]));
-}
-
-class MapPage extends StatefulWidget { const MapPage({super.key}); @override State<MapPage> createState() => _MapPageState(); }
-class _MapPageState extends State<MapPage> {
-  LatLng point = const LatLng(51.3127, 9.4797); String city = 'كاسل، ألمانيا', district = ''; bool busy = false; double radius = 25;
-  final placeSearch = TextEditingController();
-  @override void dispose() { placeSearch.dispose(); super.dispose(); }
-  Future<void> searchPlace() async {
-    final q = placeSearch.text.trim(); if (q.isEmpty) return;
-    setState(() => busy = true);
-    try {
-      final u = Uri.https('nominatim.openstreetmap.org', '/search', {'format':'jsonv2','q':q,'limit':'1','addressdetails':'1','accept-language':'ar'});
-      final r = await http.get(u, headers: {'User-Agent':'JandaliArabMarket/1.0'});
-      if (r.statusCode == 200) { final rows = jsonDecode(r.body) as List; if (rows.isNotEmpty) { final a = rows.first as Map<String,dynamic>; point = LatLng(double.parse(a['lat'].toString()),double.parse(a['lon'].toString())); final ad = (a['address'] ?? {}) as Map<String,dynamic>; city = (ad['city'] ?? ad['town'] ?? ad['village'] ?? a['display_name'] ?? q).toString(); district = (ad['suburb'] ?? ad['neighbourhood'] ?? '').toString(); } else if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('لم نجد المكان، اكتب المدينة مع الدولة'))); }
-    } catch (_) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تعذر البحث عن الموقع الآن'))); }
-    finally { if (mounted) setState(() => busy = false); }
-  }
-  Future<void> locate() async {
-    try { var p = await Geolocator.checkPermission(); if (p == LocationPermission.denied) p = await Geolocator.requestPermission(); if (p == LocationPermission.denied || p == LocationPermission.deniedForever) throw Exception('اسمح بالوصول للموقع'); final pos = await Geolocator.getCurrentPosition(); point = LatLng(pos.latitude, pos.longitude); await reverse(point); }
-    catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()))); }
-  }
-  Future<void> reverse(LatLng p) async {
-    setState(() => busy = true);
-    try {
-      final u = Uri.https('nominatim.openstreetmap.org', '/reverse', {'format':'jsonv2','lat':p.latitude.toString(),'lon':p.longitude.toString(),'zoom':'18','addressdetails':'1','accept-language':'ar'});
-      final r = await http.get(u, headers: {'User-Agent':'JandaliArabMarket/1.0'});
-      if (r.statusCode == 200) { final a = (jsonDecode(r.body)['address'] ?? {}) as Map<String, dynamic>; city = (a['city'] ?? a['town'] ?? a['village'] ?? a['county'] ?? 'موقع محدد').toString(); district = (a['suburb'] ?? a['neighbourhood'] ?? a['quarter'] ?? '').toString(); }
-    } catch (_) {} finally { if (mounted) setState(() => busy = false); }
-  }
-  @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('اختيار الموقع')), body: Stack(children: [
-    FlutterMap(options: MapOptions(initialCenter: point, initialZoom: 12, onTap: (_, p) { setState(() => point = p); reverse(p); }), children: [
-      TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.jandali.market'),
-      MarkerLayer(markers: [Marker(point: point, width: 44, height: 44, child: const Icon(Icons.location_pin, color: Colors.red, size: 42))]),
-    ]),
-    Positioned(top: 12, left: 12, right: 12, child: Card(child: Padding(padding: const EdgeInsets.all(8), child: Row(children: [Expanded(child: TextField(controller: placeSearch, decoration: const InputDecoration(hintText: 'اكتب مدينة وبلداً، مثل كاسل، ألمانيا', isDense: true), onSubmitted: (_) => searchPlace())), IconButton(onPressed: busy ? null : searchPlace, icon: const Icon(Icons.search)), IconButton(onPressed: locate, icon: const Icon(Icons.my_location))])))),
-    Positioned(bottom: 16, left: 12, right: 12, child: Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(mainAxisSize: MainAxisSize.min, children: [
-      Text(busy ? 'جارٍ تحديد العنوان...' : city + ' ' + district, style: const TextStyle(fontWeight: FontWeight.bold)),
-      Row(children: [const Text('نطاق البحث'), Expanded(child: Slider(value: radius, min: 1, max: 50, divisions: 49, label: '${radius.round()} كم', onChanged: (v) => setState(() => radius = v))), Text('${radius.round()} كم')]),
-      FilledButton(onPressed: busy ? null : () => Navigator.pop(context, {'city': city, 'district': district, 'radius': radius.round().toString()}), child: const Text('تأكيد الموقع')),
-    ])))),
-  ]));
-}
-
-class ChatPage extends StatefulWidget { final String id; const ChatPage({super.key, required this.id}); @override State<ChatPage> createState() => _ChatPageState(); }
-class _ChatPageState extends State<ChatPage> {
-  final input = TextEditingController(); bool sending = false;
-  @override void dispose() { input.dispose(); super.dispose(); }
-  Future<void> send() async { if (input.text.trim().isEmpty) return; setState(() => sending = true); try { await MarketService.instance.sendMessage(widget.id, input.text); input.clear(); setState(() {}); } catch (e) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()))); } finally { if (mounted) setState(() => sending = false); } }
-  @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('محادثة خاصة')), body: Column(children: [
-    Expanded(child: FutureBuilder<List<Map<String, dynamic>>>(future: MarketService.instance.messages(widget.id), builder: (c, s) {
-      if (s.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-      if (s.hasError) return Center(child: Text(s.error.toString()));
-      return ListView(padding: const EdgeInsets.all(12), children: (s.data ?? []).map((m) { final mine = m['sender_id'] == MarketService.instance.user?.id; return Align(alignment: mine ? Alignment.centerRight : Alignment.centerLeft, child: Container(margin: const EdgeInsets.all(4), padding: const EdgeInsets.all(12), constraints: const BoxConstraints(maxWidth: 300), decoration: BoxDecoration(color: mine ? const Color(0xFFDDF3E3) : Colors.white, borderRadius: BorderRadius.circular(12)), child: Text(m['body'].toString()))); }).toList());
-    })),
-    SafeArea(child: Row(children: [Expanded(child: TextField(controller: input, decoration: const InputDecoration(hintText: 'اكتب رسالتك'))), IconButton(onPressed: sending ? null : send, icon: const Icon(Icons.send, color: green))])),
-  ]));
-}
-
-class MyAdsPage extends StatefulWidget { const MyAdsPage({super.key}); @override State<MyAdsPage> createState() => _MyAdsPageState(); }
-class _MyAdsPageState extends State<MyAdsPage> {
-  late Future<List<MarketListing>> future;
-  @override void initState() { super.initState(); future = MarketService.instance.myListings(); }
-  @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('إعلاناتي')), body: FutureBuilder<List<MarketListing>>(future: future, builder: (c, s) {
-    if (s.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-    if (s.hasError) return Center(child: Text(s.error.toString()));
-    final rows = s.data ?? [];
-    return ListView(children: rows.map((x) => ListTile(title: Text(x.title), subtitle: Text(x.location + ' • ' + x.status), trailing: PopupMenuButton<String>(onSelected: (v) async { try { if (v == 'close') await MarketService.instance.closeListing(x.id); if (v == 'delete') await MarketService.instance.deleteListing(x.id); setState(() => future = MarketService.instance.myListings()); } catch (e) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()))); } }, itemBuilder: (_) => const [PopupMenuItem(value: 'close', child: Text('إيقاف')), PopupMenuItem(value: 'delete', child: Text('حذف'))]))).toList());
-  }));
-}
-), '');
-        return (bytes: compressed, name: '${baseName}_compressed.jpg');
-      }
-    } catch (_) {
-      // Fall through to the original bytes.
-    }
-    return (bytes: originalBytes, name: photo.name);
-  }
-  Future<void> map() async { final r = await Navigator.push<Map<String, String>>(context, MaterialPageRoute(builder: (_) => const MapPage())); if (r != null) { city.text = r['city'] ?? ''; district.text = r['district'] ?? ''; setState(() {}); } }
-  Future<void> publish() async {
-    if (photos.isEmpty) { msg('أضف صورة واحدة على الأقل'); return; }
-    setState(() => busy = true);
-    try {
-      final bytes = <Uint8List>[], names = <String>[];
-      for (final p in photos) { bytes.add(await p.readAsBytes()); names.add(p.name); }
       await MarketService.instance.publish(title: title.text, description: desc.text, category: category, city: city.text, district: district.text, phone: phone.text, price: category == 'free' ? 0 : num.tryParse(price.text), currency: currency, photoBytes: bytes, photoNames: names);
       if (mounted) Navigator.pop(context, true);
     } catch (e) { msg('تعذر النشر: ' + e.toString()); }
