@@ -179,7 +179,7 @@ class _MarketHomeState extends State<MarketHome> {
     if (s.hasError) return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [Text(s.error.toString()), FilledButton(onPressed: auth, child: const Text('تسجيل الدخول'))]));
     final rows = s.data ?? [];
     if (rows.isEmpty) return const Center(child: Text('لا توجد محادثات بعد'));
-    return ListView(children: rows.map((r) => ListTile(leading: const Icon(Icons.chat), title: const Text('محادثة خاصة'), subtitle: Text(r['created_at'].toString()), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ChatPage(id: r['id'])))).toList());
+    return ListView(children: rows.map((r) { return ListTile(leading: const Icon(Icons.chat), title: const Text('محادثة خاصة'), subtitle: Text(r['created_at'].toString()), onTap: () { Navigator.push(context, MaterialPageRoute(builder: (_) => ChatPage(id: r['id'] as String))); }); }).toList());
   });
 
   Widget accountPage() => ListView(padding: const EdgeInsets.all(16), children: [
