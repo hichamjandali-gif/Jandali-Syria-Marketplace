@@ -62,7 +62,7 @@ class MarketService {
   Future<List<MarketListing>> myListings() async {
     final u=user;if(u==null)throw Exception('سجّل الدخول أولاً');
     final r=await db.from('market_listings').select().eq('owner_id',u.id).order('created_at',ascending:false);
-    return r.map((e)=>MarketListing.fromMap(e as Map<String,dynamic>)).toList();
+    return r.map((e)=>MarketListing.fromMap(e)).toList();
   }
 
   Future<String> publish({required String title,required String description,required String category,required String city,String? district,String? phone,num? price,required String currency,required List<Uint8List> photoBytes,required List<String> photoNames}) async {
