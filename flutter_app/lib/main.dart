@@ -191,8 +191,8 @@ class _MarketHomeState extends State<MarketHome> {
     return Scaffold(
       appBar: AppBar(title: const Text('السوق العربي | Arab Market', style: TextStyle(fontWeight: FontWeight.w900)), actions: [IconButton(onPressed: load, icon: const Icon(Icons.refresh))]),
       body: IndexedStack(index: tab, children: pages),
-      floatingActionButton: FloatingActionButton.extended(onPressed: add, backgroundColor: green, foregroundColor: Colors.white, icon: const Icon(Icons.add), label: const Text('أضف إعلاناً')),
-      bottomNavigationBar: NavigationBar(selectedIndex: tab, onDestinationSelected: (v) => setState(() => tab = v), destinations: const [
+      floatingActionButton: FloatingActionButton.extended(onPressed: () => add(), backgroundColor: green, foregroundColor: Colors.white, icon: const Icon(Icons.add), label: const Text('أضف إعلاناً')),
+      bottomNavigationBar: NavigationBar(selectedIndex: tab, onDestinationSelected: (v) => setState(() => tab = v), destinations: [
         NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'الرئيسية'),
         NavigationDestination(icon: Icon(Icons.search), label: 'بحث'),
         NavigationDestination(icon: Icon(Icons.favorite_border), selectedIcon: Icon(Icons.favorite), label: fav.isEmpty ? 'المفضلة' : 'المفضلة (${fav.length})'),
