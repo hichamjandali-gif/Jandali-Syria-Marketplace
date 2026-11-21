@@ -9,6 +9,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_tts/flutter_tts.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'market_service.dart';
 
 const url = String.fromEnvironment('SUPABASE_URL');
@@ -96,9 +98,21 @@ class _MarketHomeState extends State<MarketHome> {
   String search = '', city = 'Kassel';
   String? category;
   final searchBox = TextEditingController();
+  final speech = stt.SpeechToText();
+  bool listening = false;
 
   @override void initState() { super.initState(); loadFav(); load(); }
-  @override void dispose() { searchBox.dispose(); super.dispose(); }
+  @override void dispose() { searchBox.dispose(); speech.stop(); super.dispose(); }
+
+  Future<void> voiceSearch() async {
+    try {
+      final available = await speech.initialize(onStatus: (status) { if (mounted) setState(() => listening = status == 'listening'); }, onError: (_) { if (mounted) setState(() => listening = false); });
+      if (!mounted) return;
+      if (!available) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('البحث الصوتي غير متاح على هذا الجهاز'))); return; }
+      setState(() => listening = true);
+      await speech.listen(localeId: 'ar_SA', onResult: (result) { if (!mounted) return; searchBox.text = result.recognizedWords; setState(() => search = result.recognizedWords); });
+    } catch (e) { if (mounted) { setState(() => listening = false); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تعذر تشغيل البحث الصوتي: $e'))); } }
+  }
 
   Future<void> loadFav() async {
     final p = await SharedPreferences.getInstance();
@@ -186,7 +200,7 @@ class _MarketHomeState extends State<MarketHome> {
 
   Widget searchPage() => Column(children: [
     Padding(padding: const EdgeInsets.all(12), child: Column(children: [
-      TextField(controller: searchBox, onChanged: (v) => setState(() => search = v), decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'ابحث عن سلعة أو خدمة', filled: true, fillColor: Colors.white)),
+      TextField(controller: searchBox, onChanged: (v) => setState(() => search = v), decoration: InputDecoration(prefixIcon: const Icon(Icons.search), suffixIcon: IconButton(onPressed: voiceSearch, icon: Icon(listening ? Icons.mic : Icons.mic_none, color: listening ? Colors.red : null), tooltip: 'بحث صوتي'), hintText: 'ابحث عن سلعة أو خدمة', filled: true, fillColor: Colors.white)),
       const Align(alignment: Alignment.centerRight, child: Text('الموقع: كاسل، ألمانيا • 25 كم', style: TextStyle(fontWeight: FontWeight.w600))),
       Row(children: [
         Expanded(child: DropdownButtonFormField<String?>(value: category, decoration: const InputDecoration(labelText: 'القسم'), items: [const DropdownMenuItem<String?>(value: null, child: Text('كل الأقسام')), ...marketCategories.map((x) => DropdownMenuItem<String?>(value: x.id, child: Text(x.name)))], onChanged: (v) => setState(() => category = v))),
@@ -246,6 +260,8 @@ class AdDetailPage extends StatefulWidget {
 }
 class _AdDetailPageState extends State<AdDetailPage> {
   int active = 0; bool waiting = false;
+  final tts = FlutterTts();
+  @override void dispose() { tts.stop(); super.dispose(); }
   @override Widget build(BuildContext context) {
     final x = widget.ad;
     return Scaffold(appBar: AppBar(title: const Text('تفاصيل الإعلان'), actions: [IconButton(onPressed: widget.onFavorite, icon: Icon(widget.favorite ? Icons.favorite : Icons.favorite_border))]),
@@ -256,6 +272,7 @@ class _AdDetailPageState extends State<AdDetailPage> {
         Text(x.priceLabel, style: const TextStyle(color: green, fontSize: 20, fontWeight: FontWeight.bold)),
         ListTile(leading: const Icon(Icons.location_on), title: Text(x.location)),
         Text(x.description, style: const TextStyle(fontSize: 16)),
+        OutlinedButton.icon(onPressed: () async { try { await tts.setLanguage('ar-SA'); await tts.speak('${x.title}. ${x.description}'); } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تعذر تشغيل الاستماع: $e'))); } }, icon: const Icon(Icons.volume_up), label: const Text('استماع لوصف الإعلان')),
         FilledButton.icon(onPressed: waiting ? null : () async {
           if (MarketService.instance.user == null) {
             final ok = await showDialog<bool>(context: context, barrierDismissible: false, builder: (_) => const AuthDialog());
