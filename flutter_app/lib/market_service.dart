@@ -1,3 +1,4 @@
+import 'dart:core';
 import 'dart:typed_data';
 import 'package:mime/mime.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
