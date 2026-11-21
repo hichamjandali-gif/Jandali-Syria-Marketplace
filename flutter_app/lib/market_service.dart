@@ -75,7 +75,14 @@ class MarketService {
       for(var i=0;i<photoBytes.length;i++){
         final bytes=photoBytes[i],original=photoNames[i];
         final rawExt=original.contains('.')?original.split('.').last.toLowerCase():'';
-        final ext=RegExp(r'^[a-z0-9]{2,5}
+        final ext=RegExp(r'^[a-z0-9]{2,5}$').hasMatch(rawExt)
+            ? rawExt
+            : original.toLowerCase().contains('heif') ? 'heif'
+            : original.toLowerCase().contains('heic') ? 'heic'
+            : 'jpg';
+        final path=u.id+'/'+id+'/'+i.toString().padLeft(2,'0')+'_'+_uuid.v4()+'.'+ext;
+        final mime=lookupMimeType(original,headerBytes:bytes)??
+            (ext=='heic'?'image/heic':ext=='heif'?'image/heif':'application/octet-stream');
         await storage.uploadBinary(path,bytes,fileOptions:FileOptions(contentType:mime,upsert:false));
         paths.add(path);urls.add(storage.getPublicUrl(path));
       }
