@@ -53,7 +53,7 @@ class MarketService {
     if(category!=null&&category.isNotEmpty) req=req.eq('category',category);
     if(city!=null&&city.trim().isNotEmpty) req=req.ilike('city','%${city.trim()}%');
     final r=await req.order('created_at',ascending:false).limit(200);
-    final items=r.map((e)=>MarketListing.fromMap(e as Map<String,dynamic>)).toList();
+    final items=r.map((e)=>MarketListing.fromMap(e)).toList();
     final q=query.trim().toLowerCase();
     if(q.isEmpty)return items;
     return items.where((x)=>'${x.title} ${x.description} ${x.city} ${x.district??''}'.toLowerCase().contains(q)).toList();
@@ -99,11 +99,11 @@ class MarketService {
 
   Future<void> closeListing(String id) async {
     final u=user;if(u==null)throw Exception('سجّل الدخول');
-    final r=await db.from('market_listings').update({'status':'closed'}).eq('id',id).eq('owner_id',u.id);
+    await db.from('market_listings').update({'status':'closed'}).eq('id',id).eq('owner_id',u.id);
   }
   Future<void> deleteListing(String id) async {
     final u=user;if(u==null)throw Exception('سجّل الدخول');
-    final r=await db.from('market_listings').delete().eq('id',id).eq('owner_id',u.id);
+    await db.from('market_listings').delete().eq('id',id).eq('owner_id',u.id);
   }
   Future<String> openConversation(MarketListing listing) async {
     final u=user;if(u==null)throw Exception('سجّل الدخول للمراسلة');
@@ -125,7 +125,7 @@ class MarketService {
   Future<void> sendMessage(String id,String body) async {
     final u=user;if(u==null)throw Exception('سجّل الدخول');
     final text=body.trim();if(text.isEmpty)return;
-    final r=await db.from('market_messages').insert({'conversation_id':id,'sender_id':u.id,'body':text});
+    await db.from('market_messages').insert({'conversation_id':id,'sender_id':u.id,'body':text});
     
   }
 }
