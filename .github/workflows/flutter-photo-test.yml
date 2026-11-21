@@ -1,4 +1,4 @@
-name: Build Flutter photo test APK
+name: Build native Flutter Arab Market APK
 
 on:
   push:
@@ -25,25 +25,29 @@ jobs:
       - name: Generate Android platform scaffold
         working-directory: flutter_app
         run: |
-          flutter create --platforms=android --project-name jandali_market_photo_test_v2 _android_scaffold
+          flutter create --platforms=android --project-name jandali_market_native _android_scaffold
           cp -R _android_scaffold/android ./android
           cp _android_scaffold/.metadata .metadata
           rm -rf _android_scaffold
+          sed -i '/<manifest/a\    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' android/app/src/main/AndroidManifest.xml
       - name: Install dependencies
         working-directory: flutter_app
         run: flutter pub get
-      - name: Analyze
+      - name: Analyze Dart source
         working-directory: flutter_app
         run: flutter analyze --no-fatal-infos
-      - name: Verify Supabase key is configured
+      - name: Verify Supabase publishable key
         env:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
           if [ -z "$SUPABASE_ANON_KEY" ]; then
-            echo "::error::Add SUPABASE_ANON_KEY in GitHub repository Actions secrets before building."
+            echo "::error::Missing SUPABASE_ANON_KEY GitHub Actions secret."
             exit 1
           fi
-      - name: Build APK
+          case "$SUPABASE_ANON_KEY" in
+            sb_secret_*|*service_role*) echo "::error::A secret/service_role key must never be embedded in a mobile app."; exit 1 ;;
+          esac
+      - name: Build debug APK
         working-directory: flutter_app
         env:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
@@ -54,6 +58,6 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: jandali-photo-test-v2-debug-apk
+          name: jandali-arab-market-native-debug-apk
           path: flutter_app/build/app/outputs/flutter-apk/app-debug.apk
           if-no-files-found: error
