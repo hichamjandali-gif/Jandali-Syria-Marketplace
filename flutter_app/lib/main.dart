@@ -175,10 +175,10 @@ class _MarketHomeState extends State<MarketHome> {
     return true;
   }
 
-  Future<void> add() async {
-    if (!await requireLogin()) return;
-    final ok = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => const AddAdPage()));
-    if (ok == true) await load();
+  Future<void> add({bool byVoice = false}) async {
+    if (!await requireLogin() || !mounted) return;
+    final ok = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => AddAdPage(voiceFirst: byVoice)));
+    if (mounted && ok == true) await load();
   }
   void toggle(String id) {
     setState(() { if (fav.contains(id)) { fav.remove(id); } else { fav.add(id); } });
@@ -207,6 +207,8 @@ class _MarketHomeState extends State<MarketHome> {
       Text('السوق العربي', style: TextStyle(color: Colors.white, fontSize: 25, fontWeight: FontWeight.w900)),
       Text('بيع وشراء مجاني بين الناس', style: TextStyle(color: Colors.white)),
     ])),
+    const SizedBox(height: 12),
+    Row(children: [Expanded(child: FilledButton.icon(onPressed: () => add(), icon: const Icon(Icons.add), label: const Text('أضف إعلاناً'))), const SizedBox(width: 8), Expanded(child: OutlinedButton.icon(onPressed: () => add(byVoice: true), icon: const Icon(Icons.mic), label: const Text('أضف إعلاناً بالصوت')))]),
     const SizedBox(height: 15), const Text('الأقسام', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 19)),
     GridView.builder(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), itemCount: marketCategories.length,
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3, childAspectRatio: 1.08, crossAxisSpacing: 7, mainAxisSpacing: 7),
@@ -261,7 +263,7 @@ class _MarketHomeState extends State<MarketHome> {
   Widget accountPage() => ListView(padding: const EdgeInsets.all(16), children: [
     const CircleAvatar(radius: 34, child: Icon(Icons.person, size: 38)),
     Center(child: Text(api.user?.email ?? 'زائر', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
-    if (api.user == null) FilledButton(onPressed: auth, child: const Text('تسجيل الدخول / إنشاء حساب'))
+    if (api.user == null) const ListTile(leading: Icon(Icons.person_outline), title: Text('تتصفح كزائر'), subtitle: Text('تسجيل الدخول مطلوب فقط عند إضافة إعلان أو مراسلة بائع'))
     else ...[
       ListTile(leading: const Icon(Icons.inventory), title: const Text('إعلاناتي'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyAdsPage()))),
       ListTile(leading: const Icon(Icons.logout), title: const Text('تسجيل الخروج'), onTap: () async { await Supabase.instance.client.auth.signOut(); if (mounted) setState(() => tab = 0); }),
@@ -305,7 +307,7 @@ class _AdDetailPageState extends State<AdDetailPage> {
   }
 }
 
-class AddAdPage extends StatefulWidget { const AddAdPage({super.key}); @override State<AddAdPage> createState() => _AddAdPageState(); }
+class AddAdPage extends StatefulWidget { final bool voiceFirst; const AddAdPage({super.key, this.voiceFirst = false}); @override State<AddAdPage> createState() => _AddAdPageState(); }
 class _AddAdPageState extends State<AddAdPage> {
   final picker = ImagePicker();
   final voice = stt.SpeechToText();
@@ -313,6 +315,7 @@ class _AddAdPageState extends State<AddAdPage> {
   final title = TextEditingController(), desc = TextEditingController(), city = TextEditingController(), district = TextEditingController(), phone = TextEditingController(), price = TextEditingController();
   final List<XFile> photos = [];
   String category = 'houses', currency = 'SYP'; bool busy = false;
+  @override void initState() { super.initState(); if (widget.voiceFirst) WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) dictateDescription(); }); }
   @override void dispose() { voice.stop(); title.dispose(); desc.dispose(); city.dispose(); district.dispose(); phone.dispose(); price.dispose(); super.dispose(); }
   Future<void> dictateDescription() async {
     try {
