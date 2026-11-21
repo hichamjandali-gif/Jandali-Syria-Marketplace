@@ -102,7 +102,7 @@ class _MarketHomeState extends State<MarketHome> {
   List<MarketListing> ads = [];
   Set<String> fav = {};
   bool busy = true;
-  String search = '', city = 'Kassel';
+  String search = '', city = '', selectedLocation = 'كاسل، ألمانيا';
   String? category;
   final searchBox = TextEditingController();
   final speech = stt.SpeechToText();
@@ -118,7 +118,7 @@ class _MarketHomeState extends State<MarketHome> {
   Future<void> changeLocation() async {
     final r = await Navigator.push<Map<String, String>>(context, MaterialPageRoute(builder: (_) => const MapPage()));
     if (!mounted || r == null) return;
-    setState(() { city = r['city'] ?? city; radius = r['radius'] ?? radius; });
+    setState(() { selectedLocation = r['city'] ?? selectedLocation; radius = r['radius'] ?? radius; });
   }
 
   Future<void> voiceSearch() async {
@@ -218,12 +218,12 @@ class _MarketHomeState extends State<MarketHome> {
   Widget searchPage() => Column(children: [
     Padding(padding: const EdgeInsets.all(12), child: Column(children: [
       TextField(controller: searchBox, onChanged: (v) => setState(() => search = v), decoration: InputDecoration(prefixIcon: const Icon(Icons.search), suffixIcon: IconButton(onPressed: voiceSearch, icon: Icon(listening ? Icons.mic : Icons.mic_none, color: listening ? Colors.red : null), tooltip: 'بحث صوتي'), hintText: 'ابحث عن سلعة أو خدمة', filled: true, fillColor: Colors.white)),
-      Row(children: [Expanded(child: Text('الموقع: $city • $radius كم', style: const TextStyle(fontWeight: FontWeight.w600))), TextButton.icon(onPressed: changeLocation, icon: const Icon(Icons.map_outlined), label: const Text('تغيير الموقع'))]),
+      Row(children: [Expanded(child: Text('الموقع: $selectedLocation • $radius كم', style: const TextStyle(fontWeight: FontWeight.w600))), TextButton.icon(onPressed: changeLocation, icon: const Icon(Icons.map_outlined), label: const Text('تغيير الموقع'))]),
       Row(children: [
         Expanded(child: DropdownButtonFormField<String?>(value: category, decoration: const InputDecoration(labelText: 'القسم'), items: [const DropdownMenuItem<String?>(value: null, child: Text('كل الأقسام')), ...marketCategories.map((x) => DropdownMenuItem<String?>(value: x.id, child: Text(x.name)))], onChanged: (v) => setState(() => category = v))),
         const SizedBox(width: 8), Expanded(child: TextField(decoration: const InputDecoration(labelText: 'المدينة'), onChanged: (v) => setState(() => city = v))),
       ]),
-      TextButton(onPressed: () => setState(() { category = null; city = 'Kassel'; search = ''; searchBox.clear(); }), child: const Text('مسح الفلاتر')),
+      TextButton(onPressed: () => setState(() { category = null; city = ''; search = ''; selectedLocation = 'كاسل، ألمانيا'; radius = '25'; searchBox.clear(); }), child: const Text('مسح الفلاتر')),
     ])),
     Expanded(child: feed(results)),
   ]);
