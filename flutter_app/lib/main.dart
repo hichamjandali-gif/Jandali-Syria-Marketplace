@@ -216,7 +216,7 @@ class _MarketHomeState extends State<MarketHome> {
               _navItem('الرسائل', Icons.chat_bubble_outline, 3),
               Expanded(
                 child: InkWell(
-                  onTap: () => add(),
+                  onTap: () => add(byVoice: true),
                   borderRadius: BorderRadius.circular(14),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -345,6 +345,11 @@ class _MarketHomeState extends State<MarketHome> {
     child: ListView(
       padding: const EdgeInsets.fromLTRB(12, 5, 12, 18),
       children: [
+        if (search.trim().isNotEmpty) ...[
+          Text('نتائج البحث (${results.length})', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          feed(results),
+        ] else ...[
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -416,6 +421,7 @@ class _MarketHomeState extends State<MarketHome> {
         const Text('أحدث الإعلانات', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17)),
         const SizedBox(height: 7),
         feed(ads.take(15).toList()),
+        ],
       ],
     ),
   );
