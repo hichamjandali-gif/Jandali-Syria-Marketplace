@@ -74,10 +74,67 @@ class MarketService {
       // Ordered upload: the first selected image is the cover at photo_urls[0].
       for(var i=0;i<photoBytes.length;i++){
         final bytes=photoBytes[i],original=photoNames[i];
-        final rawExt=original.contains('.')?original.split('.').last.toLowerCase():'jpg';
-        final ext=RegExp(r'^[a-z0-9]{2,5}$').hasMatch(rawExt)?rawExt:'jpg';
+        final rawExt=original.contains('.')?original.split('.').last.toLowerCase():'';
+        final ext=RegExp(r'^[a-z0-9]{2,5}
+        await storage.uploadBinary(path,bytes,fileOptions:FileOptions(contentType:mime,upsert:false));
+        paths.add(path);urls.add(storage.getPublicUrl(path));
+      }
+      final row=<String,dynamic>{
+        'id':id,'owner_id':u.id,'title':title.trim(),
+        'description':description.trim().isEmpty?title.trim():description.trim(),
+        'category':category,'city':city.trim(),
+        'district':district?.trim().isEmpty==true?null:district?.trim(),
+        'contact_phone':phone?.trim().isEmpty==true?null:phone?.trim(),
+        'price':category=='free'?0:price,'currency':currency,'photo_urls':urls,
+      };
+      final saved=await db.from('market_listings').insert(row).select('id').single();
+      return saved['id'] as String;
+    } catch (_) {
+      if(paths.isNotEmpty){try{await storage.remove(paths);}catch(_){}}
+      rethrow;
+    }
+  }
+
+  Future<void> closeListing(String id) async {
+    final u=user;if(u==null)throw Exception('سجّل الدخول');
+    await db.from('market_listings').update({'status':'closed'}).eq('id',id).eq('owner_id',u.id);
+  }
+  Future<void> deleteListing(String id) async {
+    final u=user;if(u==null)throw Exception('سجّل الدخول');
+    await db.from('market_listings').delete().eq('id',id).eq('owner_id',u.id);
+  }
+  Future<String> openConversation(MarketListing listing) async {
+    final u=user;if(u==null)throw Exception('سجّل الدخول للمراسلة');
+    if(listing.ownerId==u.id)throw Exception('هذا إعلانك');
+    final old=await db.from('market_conversations').select('id').eq('listing_id',listing.id).eq('buyer_id',u.id).maybeSingle();
+    if(old!=null)return old['id'] as String;
+    final r=await db.from('market_conversations').insert({'listing_id':listing.id,'buyer_id':u.id,'seller_id':listing.ownerId}).select('id').single();
+    return r['id'] as String;
+  }
+  Future<List<Map<String,dynamic>>> conversations() async {
+    final u=user;if(u==null)throw Exception('سجّل الدخول');
+    final r=await db.from('market_conversations').select().or('buyer_id.eq.${u.id},seller_id.eq.${u.id}').order('created_at',ascending:false);
+    return r.cast<Map<String,dynamic>>();
+  }
+  Future<List<Map<String,dynamic>>> messages(String id) async {
+    final r=await db.from('market_messages').select().eq('conversation_id',id).order('created_at',ascending:true).limit(200);
+    return r.cast<Map<String,dynamic>>();
+  }
+  Future<void> sendMessage(String id,String body) async {
+    final u=user;if(u==null)throw Exception('سجّل الدخول');
+    final text=body.trim();if(text.isEmpty)return;
+    await db.from('market_messages').insert({'conversation_id':id,'sender_id':u.id,'body':text});
+    
+  }
+}
+).hasMatch(rawExt)
+            ? rawExt
+            : original.toLowerCase().contains('heif') ? 'heif'
+            : original.toLowerCase().contains('heic') ? 'heic'
+            : 'jpg';
         final path='${u.id}/${id}/${i.toString().padLeft(2,'0')}_${_uuid.v4()}.$ext';
-        final mime=lookupMimeType(original,headerBytes:bytes)??'application/octet-stream';
+        final mime=lookupMimeType(original,headerBytes:bytes) ??
+            (ext=='heic'?'image/heic':ext=='heif'?'image/heif':'application/octet-stream');
         await storage.uploadBinary(path,bytes,fileOptions:FileOptions(contentType:mime,upsert:false));
         paths.add(path);urls.add(storage.getPublicUrl(path));
       }
