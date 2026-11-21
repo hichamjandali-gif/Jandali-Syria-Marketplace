@@ -364,7 +364,11 @@ class _AddAdPageState extends State<AddAdPage> {
   Future<({Uint8List bytes, String name})> _photoUploadData(XFile photo) async {
     final originalBytes = await photo.readAsBytes();
     if (!_isHeic(photo, originalBytes)) {
-      return (bytes: originalBytes, name: photo.name);
+      final lowerName = photo.name.toLowerCase();
+    final originalName = lowerName.endsWith('.heic') || lowerName.endsWith('.heif')
+        ? photo.name
+        : photo.name + '.heic';
+    return (bytes: originalBytes, name: originalName);
     }
     try {
       final compressed = await FlutterImageCompress.compressWithList(
@@ -397,11 +401,11 @@ class _AddAdPageState extends State<AddAdPage> {
       }
       await MarketService.instance.publish(title: title.text, description: desc.text, category: category, city: city.text, district: district.text, phone: phone.text, price: category == 'free' ? 0 : num.tryParse(price.text), currency: currency, photoBytes: bytes, photoNames: names);
       if (mounted) Navigator.pop(context, true);
-    } catch (e) { msg('تعذر النشر: ' + e.toString()); }
+    } catch (_) { msg('تعذر نشر الإعلان أو رفع الصور الآن، أعد المحاولة من فضلك'); }
     finally { if (mounted) setState(() => busy = false); }
   }
   @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('إضافة إعلان')), body: ListView(padding: const EdgeInsets.all(13), children: [
-    const Text('الصورة الأولى هي الغلاف', style: TextStyle(fontWeight: FontWeight.bold)),
+    Text('الصور (${photos.length}/8) - الصورة الأولى هي الغلاف', style: const TextStyle(fontWeight: FontWeight.bold)),
     Container(height: 240, color: Colors.black, alignment: Alignment.center, child: photos.isEmpty ? const Text('اختر الصور', style: TextStyle(color: Colors.white)) : Image.file(File(photos.first.path), fit: BoxFit.contain)),
     if (photos.isNotEmpty) SizedBox(height: 92, child: ReorderableListView(scrollDirection: Axis.horizontal, onReorder: (a, b) { setState(() { if (b > a) b--; final p = photos.removeAt(a); photos.insert(b, p); }); }, children: [for (var i = 0; i < photos.length; i++) Container(key: ValueKey(photos[i].path), width: 80, margin: const EdgeInsets.all(4), child: Stack(fit: StackFit.expand, children: [GestureDetector(onTap: () => setState(() { final p = photos.removeAt(i); photos.insert(0, p); }), child: Image.file(File(photos[i].path), fit: BoxFit.cover)), Positioned(right: 0, top: 0, child: IconButton(onPressed: () => setState(() => photos.removeAt(i)), icon: const Icon(Icons.close, color: Colors.red)))]))])),
     Row(children: [Expanded(child: OutlinedButton.icon(onPressed: album, icon: const Icon(Icons.photo_library), label: const Text('الألبوم'))), Expanded(child: FilledButton.icon(onPressed: camera, icon: const Icon(Icons.camera_alt), label: const Text('الكاميرا')))]),
