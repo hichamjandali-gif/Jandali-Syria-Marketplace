@@ -36,6 +36,53 @@ class MarketApp extends StatelessWidget {
   );
 }
 
+class AuthDialog extends StatefulWidget {
+  const AuthDialog({super.key});
+  @override State<AuthDialog> createState() => _AuthDialogState();
+}
+class _AuthDialogState extends State<AuthDialog> {
+  final email = TextEditingController();
+  final password = TextEditingController();
+  bool signup = false, waiting = false;
+  @override void dispose() {
+    email.dispose();
+    password.dispose();
+    super.dispose();
+  }
+  Future<void> submit() async {
+    if (waiting) return;
+    setState(() => waiting = true);
+    try {
+      final auth = Supabase.instance.client.auth;
+      final response = signup
+          ? await auth.signUp(email: email.text.trim(), password: password.text)
+          : await auth.signInWithPassword(email: email.text.trim(), password: password.text);
+      if (!mounted) return;
+      if (response.user != null && response.session != null) {
+        Navigator.of(context).pop(true);
+      } else if (signup) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('افتح بريدك لتأكيد الحساب، ثم سجّل الدخول')));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+    } finally {
+      if (mounted) setState(() => waiting = false);
+    }
+  }
+  @override Widget build(BuildContext context) => AlertDialog(
+    title: Text(signup ? 'إنشاء حساب' : 'تسجيل الدخول'),
+    content: Column(mainAxisSize: MainAxisSize.min, children: [
+      TextField(controller: email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'البريد الإلكتروني')),
+      TextField(controller: password, obscureText: true, decoration: const InputDecoration(labelText: 'كلمة المرور')),
+      TextButton(onPressed: waiting ? null : () => setState(() => signup = !signup), child: Text(signup ? 'لديك حساب؟ تسجيل الدخول' : 'إنشاء حساب جديد')),
+    ]),
+    actions: [
+      TextButton(onPressed: waiting ? null : () => Navigator.of(context).pop(false), child: const Text('إلغاء')),
+      FilledButton(onPressed: waiting ? null : submit, child: Text(waiting ? 'انتظر...' : 'متابعة')),
+    ],
+  );
+}
+
 class MarketHome extends StatefulWidget {
   const MarketHome({super.key});
   @override State<MarketHome> createState() => _MarketHomeState();
@@ -46,7 +93,7 @@ class _MarketHomeState extends State<MarketHome> {
   List<MarketListing> ads = [];
   Set<String> fav = {};
   bool busy = true;
-  String search = '', city = '';
+  String search = '', city = 'Kassel';
   String? category;
   final searchBox = TextEditingController();
 
@@ -74,36 +121,31 @@ class _MarketHomeState extends State<MarketHome> {
     return q.isEmpty || (x.title + ' ' + x.description + ' ' + x.city).toLowerCase().contains(q);
   }).toList();
 
-  Future<void> auth() async {
-    final email = TextEditingController(), password = TextEditingController();
-    bool signup = false, waiting = false;
-    await showDialog(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, setD) => AlertDialog(
-      title: Text(signup ? 'إنشاء حساب' : 'تسجيل الدخول'),
-      content: Column(mainAxisSize: MainAxisSize.min, children: [
-        TextField(controller: email, decoration: const InputDecoration(labelText: 'البريد الإلكتروني')),
-        TextField(controller: password, obscureText: true, decoration: const InputDecoration(labelText: 'كلمة المرور')),
-        TextButton(onPressed: () => setD(() => signup = !signup), child: Text(signup ? 'تسجيل الدخول' : 'إنشاء حساب جديد')),
-      ]),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-        FilledButton(onPressed: waiting ? null : () async {
-          setD(() => waiting = true);
-          try {
-            final a = Supabase.instance.client.auth;
-            final r = signup ? await a.signUp(email: email.text.trim(), password: password.text) : await a.signInWithPassword(email: email.text.trim(), password: password.text);
-            if (r.user != null && ctx.mounted) Navigator.pop(ctx);
-            if (signup && r.session == null && mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('افتح بريدك لتأكيد الحساب')));
-          } catch (e) {
-            if (ctx.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
-          } finally { if (ctx.mounted) setD(() => waiting = false); }
-        }, child: Text(waiting ? 'انتظر...' : 'متابعة')),
-      ],
-    )));
-    email.dispose(); password.dispose(); if (mounted) setState(() {});
+  Future<bool> auth() async {
+    if (api.user != null) return true;
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AuthDialog(),
+    );
+    if (!mounted) return false;
+    setState(() {});
+    return result == true && api.user != null;
+  }
+
+  Future<bool> requireLogin() async {
+    if (api.user != null) return true;
+    final ok = await auth();
+    if (!mounted) return false;
+    if (!ok) {
+      setState(() => tab = 0);
+      return false;
+    }
+    return true;
   }
 
   Future<void> add() async {
-    if (api.user == null) { await auth(); if (api.user == null) return; }
+    if (!await requireLogin()) return;
     final ok = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => const AddAdPage()));
     if (ok == true) await load();
   }
@@ -145,11 +187,12 @@ class _MarketHomeState extends State<MarketHome> {
   Widget searchPage() => Column(children: [
     Padding(padding: const EdgeInsets.all(12), child: Column(children: [
       TextField(controller: searchBox, onChanged: (v) => setState(() => search = v), decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'ابحث عن سلعة أو خدمة', filled: true, fillColor: Colors.white)),
+      const Align(alignment: Alignment.centerRight, child: Text('الموقع: كاسل، ألمانيا • 25 كم', style: TextStyle(fontWeight: FontWeight.w600))),
       Row(children: [
         Expanded(child: DropdownButtonFormField<String?>(value: category, decoration: const InputDecoration(labelText: 'القسم'), items: [const DropdownMenuItem<String?>(value: null, child: Text('كل الأقسام')), ...marketCategories.map((x) => DropdownMenuItem<String?>(value: x.id, child: Text(x.name)))], onChanged: (v) => setState(() => category = v))),
         const SizedBox(width: 8), Expanded(child: TextField(decoration: const InputDecoration(labelText: 'المدينة'), onChanged: (v) => setState(() => city = v))),
       ]),
-      TextButton(onPressed: () => setState(() { category = null; city = ''; search = ''; searchBox.clear(); }), child: const Text('مسح الفلاتر')),
+      TextButton(onPressed: () => setState(() { category = null; city = 'Kassel'; search = ''; searchBox.clear(); }), child: const Text('مسح الفلاتر')),
     ])),
     Expanded(child: feed(results)),
   ]);
@@ -174,9 +217,11 @@ class _MarketHomeState extends State<MarketHome> {
     });
   }
 
-  Widget chatsPage() => FutureBuilder<List<Map<String, dynamic>>>(future: api.user == null ? Future.error('سجّل الدخول لعرض الرسائل') : api.conversations(), builder: (c, s) {
+  Widget chatsPage() => api.user == null
+      ? Center(child: FilledButton(onPressed: () async { if (await requireLogin() && mounted) setState(() => tab = 3); }, child: const Text('تسجيل الدخول لعرض الرسائل')))
+      : FutureBuilder<List<Map<String, dynamic>>>(future: api.conversations(), builder: (c, s) {
     if (s.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-    if (s.hasError) return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [Text(s.error.toString()), FilledButton(onPressed: auth, child: const Text('تسجيل الدخول'))]));
+    if (s.hasError) return Center(child: Text(s.error.toString()));
     final rows = s.data ?? [];
     if (rows.isEmpty) return const Center(child: Text('لا توجد محادثات بعد'));
     return ListView(children: rows.map((r) { return ListTile(leading: const Icon(Icons.chat), title: const Text('محادثة خاصة'), subtitle: Text(r['created_at'].toString()), onTap: () { Navigator.push(context, MaterialPageRoute(builder: (_) => ChatPage(id: r['id'] as String))); }); }).toList());
@@ -188,7 +233,7 @@ class _MarketHomeState extends State<MarketHome> {
     if (api.user == null) FilledButton(onPressed: auth, child: const Text('تسجيل الدخول / إنشاء حساب'))
     else ...[
       ListTile(leading: const Icon(Icons.inventory), title: const Text('إعلاناتي'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyAdsPage()))),
-      ListTile(leading: const Icon(Icons.logout), title: const Text('تسجيل الخروج'), onTap: () async { await Supabase.instance.client.auth.signOut(); setState(() {}); }),
+      ListTile(leading: const Icon(Icons.logout), title: const Text('تسجيل الخروج'), onTap: () async { await Supabase.instance.client.auth.signOut(); if (mounted) setState(() => tab = 0); }),
     ],
     const Divider(), const ListTile(title: Text('السوق العربي - By Hicham Jandali'), subtitle: Text('نسخة Flutter تجريبية')),
   ]);
@@ -212,6 +257,10 @@ class _AdDetailPageState extends State<AdDetailPage> {
         ListTile(leading: const Icon(Icons.location_on), title: Text(x.location)),
         Text(x.description, style: const TextStyle(fontSize: 16)),
         FilledButton.icon(onPressed: waiting ? null : () async {
+          if (MarketService.instance.user == null) {
+            final ok = await showDialog<bool>(context: context, barrierDismissible: false, builder: (_) => const AuthDialog());
+            if (!mounted || ok != true || MarketService.instance.user == null) return;
+          }
           setState(() => waiting = true);
           try { final id = await MarketService.instance.openConversation(x); if (mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => ChatPage(id: id))); }
           catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()))); }
