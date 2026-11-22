@@ -67,7 +67,7 @@ class _AuthDialogState extends State<AuthDialog> {
     } on AuthException catch (e) {
       if (mounted) {
         final invalid = e.statusCode == '400' || e.code == 'invalid_credentials' || e.message.toLowerCase().contains('invalid login credentials');
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: invalid
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: !signup && invalid
           ? Column(mainAxisSize: MainAxisSize.min, children: [const Text('الإيميل أو كلمة المرور غير صحيحة - أو أنشئ حساب جديد'), TextButton(onPressed: resetPassword, child: const Text('نسيت كلمة المرور؟'))])
           : Text(signup ? 'تعذر إنشاء الحساب. تحقق من البيانات وحاول مجدداً' : 'تعذر تسجيل الدخول. حاول مرة أخرى')));
       }
