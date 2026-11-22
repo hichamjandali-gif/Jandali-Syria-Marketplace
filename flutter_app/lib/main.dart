@@ -590,13 +590,14 @@ class _AddAdPageState extends State<AddAdPage> {
 
   void msg(String s) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s)));
 
-  bool _isHeic(XFile photo, Uint8List bytes) {
-    final name = photo  Future<({Uint8List bytes, String name})> _photoUploadData(XFile photo) async {
+  Future<({Uint8List bytes, String name})> _photoUploadData(XFile photo) async {
     // Preserve the exact bytes and original filename, including HEIC/HEIF.
     final originalBytes = await photo.readAsBytes();
     return (bytes: originalBytes, name: photo.name);
   }
- await _photoUploadData(photo);
+
+  Future<void> _cachePhoto(XFile photo) async {
+    final prepared = await _photoUploadData(photo);
     uploadCache[photo.path] = prepared;
     previewCache[photo.path] = prepared.bytes;
   }
