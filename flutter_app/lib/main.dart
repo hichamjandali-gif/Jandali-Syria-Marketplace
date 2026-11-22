@@ -61,9 +61,11 @@ class _AuthDialogState extends State<AuthDialog> {
     setState(() => waiting = true);
     try {
       final auth = Supabase.instance.client.auth;
+      debugPrint('محاولة دخول من APK - البريد: ${email.text.trim()} - العملية: ${signup ? 'إنشاء حساب' : 'تسجيل دخول'}');
       final response = signup
           ? await auth.signUp(email: email.text.trim(), password: password.text, data: {'full_name': displayName.text.trim()})
           : await auth.signInWithPassword(email: email.text.trim(), password: password.text);
+      debugPrint('وصل رد من Supabase - النتيجة: user=${response.user != null}, session=${response.session != null}');
       if (!mounted) return;
       if (response.user != null && response.session != null) {
         Navigator.of(context).pop(true);
@@ -71,13 +73,16 @@ class _AuthDialogState extends State<AuthDialog> {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('افتح بريدك لتأكيد الحساب، ثم سجّل الدخول')));
       }
     } on AuthException catch (e) {
+      debugPrint('وصل رد من Supabase - رفض Auth: status=${e.statusCode}, code=${e.code}, message=${e.message}');
       if (mounted) {
         final invalid = e.statusCode == '400' || e.code == 'invalid_credentials' || e.message.toLowerCase().contains('invalid login credentials');
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: !signup && invalid
           ? Column(mainAxisSize: MainAxisSize.min, children: [const Text('الإيميل أو كلمة المرور غير صحيحة - أو أنشئ حساب جديد'), TextButton(onPressed: resetPassword, child: const Text('نسيت كلمة المرور؟'))])
           : Text(signup ? 'تعذر إنشاء الحساب. تحقق من البيانات وحاول مجدداً' : 'تعذر تسجيل الدخول. حاول مرة أخرى')));
       }
-    } catch (_) {
+    } catch (e, stackTrace) {
+      debugPrint('خطأ أثناء محاولة Auth من APK: $e');
+      debugPrintStack(stackTrace: stackTrace);
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('حدث خطأ. تحقق من الاتصال وحاول مرة أخرى')));
     } finally {
       if (mounted) setState(() => waiting = false);
