@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -117,7 +118,8 @@ class _MarketHomeState extends State<MarketHome> {
   final speech = stt.SpeechToText();
   bool listening = false;
   final homeTts = FlutterTts();
-  String radius = '25';
+  double radiusKm = 25;
+  double? searchLat, searchLng;
 
   @override void initState() { super.initState(); loadFav(); load(); }
   @override void dispose() { searchBox.dispose(); speech.stop(); homeTts.stop(); super.dispose(); }
@@ -125,9 +127,9 @@ class _MarketHomeState extends State<MarketHome> {
   Future<void> speak(String text) async { try { await homeTts.setLanguage('ar-SA'); await homeTts.speak(text); } catch (_) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ميزة الاستماع غير متاحة على هذا الجهاز'))); } }
 
   Future<void> changeLocation() async {
-    final r = await Navigator.push<Map<String, String>>(context, MaterialPageRoute(builder: (_) => const MapPage()));
+    final r = await Navigator.push<Map<String, dynamic>>(context, MaterialPageRoute(builder: (_) => const MapPage()));
     if (!mounted || r == null) return;
-    setState(() { selectedLocation = r['city'] ?? selectedLocation; radius = r['radius'] ?? radius; });
+    setState(() { selectedLocation = (r['city'] ?? selectedLocation).toString(); radiusKm = (r['radius'] as num?)?.toDouble() ?? radiusKm; searchLat = (r['lat'] as num?)?.toDouble(); searchLng = (r['lng'] as num?)?.toDouble(); });
   }
 
   Future<void> voiceSearch() async {
@@ -154,7 +156,20 @@ class _MarketHomeState extends State<MarketHome> {
     catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تعذر تحميل الإعلانات: ' + e.toString()))); }
     finally { if (mounted) setState(() => busy = false); }
   }
-  List<MarketListing> get results => ads.where((x) {
+  double _distanceKm(double lat1, double lng1, double lat2, double lng2) {
+    const earthRadiusKm = 6371.0;
+    final dLat = (lat2 - lat1) * math.pi / 180;
+    final dLng = (lng2 - lng1) * math.pi / 180;
+    final a = math.pow(math.sin(dLat / 2), 2) + math.cos(lat1 * math.pi / 180) * math.cos(lat2 * math.pi / 180) * math.pow(math.sin(dLng / 2), 2);
+    return earthRadiusKm * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+  }
+
+  List<MarketListing> get locationFilteredAds => ads.where((x) {
+    if (searchLat == null || searchLng == null || x.lat == null || x.lng == null) return true;
+    return _distanceKm(searchLat!, searchLng!, x.lat!, x.lng!) <= radiusKm;
+  }).toList();
+
+  List<MarketListing> get results => locationFilteredAds.where((x) {
     if (category != null && x.category != category) return false;
     if (city.isNotEmpty && !x.city.toLowerCase().contains(city.toLowerCase())) return false;
     final q = search.toLowerCase().trim();
@@ -326,7 +341,7 @@ class _MarketHomeState extends State<MarketHome> {
         children: [
           const Icon(Icons.location_on_outlined, color: green, size: 18),
           const SizedBox(width: 5),
-          Expanded(child: Text('منطقة البحث: $selectedLocation • $radius كم', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF286C3D)))),
+          Expanded(child: Text('منطقة البحث: $selectedLocation • ${radiusKm.round()} كم', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF286C3D)))),
           const SizedBox(width: 5),
           const Text('تغيير الموقع', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: green)),
         ],
@@ -429,7 +444,7 @@ class _MarketHomeState extends State<MarketHome> {
         const SizedBox(height: 17),
         const Text('أحدث الإعلانات', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17)),
         const SizedBox(height: 7),
-        feed(ads.take(15).toList()),
+        feed(locationFilteredAds.take(15).toList()),
         ],
       ],
     ),
@@ -458,7 +473,7 @@ class _MarketHomeState extends State<MarketHome> {
                 Expanded(child: TextField(decoration: const InputDecoration(labelText: 'المدينة', isDense: true, border: OutlineInputBorder()), onChanged: (v) => setState(() => city = v))),
               ],
             ),
-            const Align(alignment: Alignment.centerRight, child: Text('تنبيه: نطاق البحث المختار لا يُطبّق كمسافة فعلية حالياً لأن الإعلانات لا تحفظ إحداثياتها.', style: TextStyle(fontSize: 10, color: Colors.deepOrange))),
+            Align(alignment: Alignment.centerRight, child: Text(searchLat == null ? 'اختر موقع البحث من الخريطة لتفعيل فلترة المسافة. الإعلانات القديمة بلا إحداثيات تبقى ظاهرة.' : 'تُخفى الإعلانات ذات الإحداثيات خارج ${radiusKm.round()} كم، وتبقى الإعلانات القديمة ظاهرة مع تنبيه.', style: const TextStyle(fontSize: 10, color: Colors.deepOrange))),
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton(
@@ -474,7 +489,7 @@ class _MarketHomeState extends State<MarketHome> {
   );
 
   Widget favoritesPage() {
-    final rows = ads.where((x) => fav.contains(x.id)).toList();
+    final rows = locationFilteredAds.where((x) => fav.contains(x.id)).toList();
     return ListView(padding: const EdgeInsets.all(12), children: [const Text('المفضلة ❤️', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)), if (rows.isEmpty) const Text('لا توجد إعلانات محفوظة'), feed(rows)]);
   }
 
@@ -486,7 +501,7 @@ class _MarketHomeState extends State<MarketHome> {
       return Card(child: ListTile(
         contentPadding: const EdgeInsets.all(8), leading: SizedBox(width: 76, height: 76, child: x.photos.isEmpty ? Center(child: Text(cat.emoji, style: const TextStyle(fontSize: 30))) : Image.network(x.photos.first, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Center(child: Text(cat.emoji)))),
         title: Row(children: [Expanded(child: Text(x.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900))), IconButton(visualDensity: VisualDensity.compact, onPressed: () => speak(x.title + '. ' + x.description), icon: const Icon(Icons.volume_up, size: 18), tooltip: 'استمع')]),
-        subtitle: Text(x.priceLabel + '\n' + x.location, style: const TextStyle(color: green, fontWeight: FontWeight.bold)),
+        subtitle: Text(x.priceLabel + '\n' + x.location + (x.lat == null || x.lng == null ? '\nبدون موقع دقيق' : ''), style: const TextStyle(color: green, fontWeight: FontWeight.bold)),
         trailing: IconButton(onPressed: () => toggle(x.id), icon: Icon(fav.contains(x.id) ? Icons.favorite : Icons.favorite_border, color: fav.contains(x.id) ? Colors.red : null)),
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AdDetailPage(ad: x, favorite: fav.contains(x.id), onFavorite: () => toggle(x.id)))),
       ));
@@ -585,6 +600,7 @@ class _AddAdPageState extends State<AddAdPage> {
   final Map<String, Uint8List> previewCache = {};
   final Map<String, ({Uint8List bytes, String name})> uploadCache = {};
   final Map<String, TextEditingController> detailControllers = {};
+  LatLng? adPoint;
   String category = 'houses', currency = 'SYP';
   bool busy = false;
 
@@ -690,12 +706,13 @@ class _AddAdPageState extends State<AddAdPage> {
   }
 
   Future<void> map() async {
-    final r = await Navigator.push<Map<String, String>>(context, MaterialPageRoute(builder: (_) => const MapPage()));
-    if (r != null) { city.text = r['city'] ?? ''; district.text = r['district'] ?? ''; setState(() {}); }
+    final r = await Navigator.push<Map<String, dynamic>>(context, MaterialPageRoute(builder: (_) => const MapPage()));
+    if (r != null) { city.text = (r['city'] ?? '').toString(); district.text = (r['district'] ?? '').toString(); adPoint = LatLng((r['lat'] as num).toDouble(), (r['lng'] as num).toDouble()); setState(() {}); }
   }
 
   Future<void> publish() async {
     if (photos.isEmpty) { msg('أضف صورة واحدة على الأقل'); return; }
+    if (adPoint == null) { msg('اختر موقع الإعلان من الخريطة قبل النشر'); return; }
     setState(() => busy = true);
     try {
       final bytes = <Uint8List>[], names = <String>[];
@@ -715,6 +732,8 @@ class _AddAdPageState extends State<AddAdPage> {
         currency: currency,
         photoBytes: bytes,
         photoNames: names,
+        lat: adPoint!.latitude,
+        lng: adPoint!.longitude,
       );
       if (mounted) Navigator.pop(context, true);
     } catch (_) {
@@ -878,6 +897,7 @@ class _AddAdPageState extends State<AddAdPage> {
         ],
       ),
       TextField(controller: district, decoration: const InputDecoration(labelText: 'الحي أو المنطقة')),
+      ListTile(leading: const Icon(Icons.map, color: green), title: Text(adPoint == null ? 'اختر موقع الإعلان من الخريطة' : 'تم تحديد الموقع على الخريطة'), subtitle: Text(adPoint == null ? 'مطلوب لحفظ الإحداثيات الدقيقة' : '${adPoint!.latitude.toStringAsFixed(5)}, ${adPoint!.longitude.toStringAsFixed(5)}'), trailing: const Icon(Icons.chevron_right), onTap: map),
       TextField(controller: phone, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'رقم الهاتف (اختياري)')),
       if (category != 'free')
         Row(
@@ -929,18 +949,17 @@ class _MapPageState extends State<MapPage> {
   @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('اختيار الموقع')), body: Stack(children: [
     FlutterMap(options: MapOptions(initialCenter: point, initialZoom: 12, onTap: (_, p) { setState(() => point = p); reverse(p); }), children: [
       TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.jandali.market'),
+      CircleLayer(circles: [CircleMarker(point: point, radius: radius * 1000, useRadiusInMeter: true, color: green.withOpacity(0.13), borderColor: green, borderStrokeWidth: 2)]),
       MarkerLayer(markers: [Marker(point: point, width: 44, height: 44, child: const Icon(Icons.location_pin, color: Colors.red, size: 42))]),
     ]),
-    Positioned(top: 12, left: 12, right: 12, child: Card(child: Padding(padding: const EdgeInsets.all(8), child: Row(children: [Expanded(child: TextField(controller: placeSearch, decoration: const InputDecoration(hintText: 'اكتب مدينة وبلداً، مثل كاسل، ألمانيا', isDense: true), onSubmitted: (_) => searchPlace())), IconButton(onPressed: busy ? null : searchPlace, icon: const Icon(Icons.search)), IconButton(onPressed: locate, icon: const Icon(Icons.my_location))])))),
+    Positioned(top: 12, left: 12, right: 12, child: Card(child: Padding(padding: const EdgeInsets.all(8), child: Row(children: [Expanded(child: TextField(controller: placeSearch, decoration: const InputDecoration(hintText: 'اكتب مدينة وبلداً، مثل كاسل، ألمانيا', isDense: true), onSubmitted: (_) => searchPlace())), IconButton(onPressed: busy ? null : searchPlace, icon: const Icon(Icons.search)), IconButton(onPressed: busy ? null : locate, icon: const Icon(Icons.my_location))])))),
     Positioned(bottom: 16, left: 12, right: 12, child: Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(mainAxisSize: MainAxisSize.min, children: [
       Text(busy ? 'جارٍ تحديد العنوان...' : city + ' ' + district, style: const TextStyle(fontWeight: FontWeight.bold)),
       Row(children: [const Text('نطاق البحث'), Expanded(child: Slider(value: radius, min: 1, max: 50, divisions: 49, label: '${radius.round()} كم', onChanged: (v) => setState(() => radius = v))), Text('${radius.round()} كم')]),
-      FilledButton(onPressed: busy ? null : () => Navigator.pop(context, {'city': city, 'district': district, 'radius': radius.round().toString()}), child: const Text('تأكيد الموقع')),
+      FilledButton(onPressed: busy ? null : () => Navigator.pop(context, {'city': city, 'district': district, 'radius': radius, 'lat': point.latitude, 'lng': point.longitude}), child: const Text('تأكيد موقع البحث')),
     ])))),
   ]));
-}
-
-class ChatPage extends StatefulWidget { final String id; const ChatPage({super.key, required this.id}); @override State<ChatPage> createState() => _ChatPageState(); }
+}class ChatPage extends StatefulWidget { final String id; const ChatPage({super.key, required this.id}); @override State<ChatPage> createState() => _ChatPageState(); }
 class _ChatPageState extends State<ChatPage> {
   final input = TextEditingController();
   bool sending = false;
