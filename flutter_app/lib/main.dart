@@ -5,7 +5,6 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
-import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -203,7 +202,7 @@ class _MarketHomeState extends State<MarketHome> {
       bottomNavigationBar: SafeArea(
         top: false,
         child: Container(
-          height: 68,
+          height: 74,
           decoration: const BoxDecoration(
             color: Colors.white,
             border: Border(top: BorderSide(color: Color(0xFFE8E8E8))),
@@ -592,39 +591,12 @@ class _AddAdPageState extends State<AddAdPage> {
   void msg(String s) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s)));
 
   bool _isHeic(XFile photo, Uint8List bytes) {
-    final name = photo.name.toLowerCase();
-    if (name.endsWith('.heic') || name.endsWith('.heif') || name.startsWith('heic.') || name.startsWith('heif.') || name.contains('.heic.') || name.contains('.heif.')) return true;
-    if (bytes.length < 12) return false;
-    final signature = String.fromCharCodes(bytes.sublist(4, 12)).toLowerCase();
-    return signature.contains('heic') || signature.contains('heif') || signature.contains('heix') || signature.contains('hevc') || signature.contains('mif1') || signature.contains('msf1');
-  }
-
-  Future<({Uint8List bytes, String name})> _photoUploadData(XFile photo) async {
+    final name = photo  Future<({Uint8List bytes, String name})> _photoUploadData(XFile photo) async {
+    // Preserve the exact bytes and original filename, including HEIC/HEIF.
     final originalBytes = await photo.readAsBytes();
-    if (!_isHeic(photo, originalBytes)) {
-      return (bytes: originalBytes, name: photo.name);
-    }
-    try {
-      final compressed = await FlutterImageCompress.compressWithList(
-        originalBytes,
-        minWidth: 2000,
-        minHeight: 2000,
-        quality: 85,
-        format: CompressFormat.jpeg,
-      );
-      if (compressed.isNotEmpty) {
-        final dot = photo.name.lastIndexOf('.');
-        final baseName = dot > 0 ? photo.name.substring(0, dot) : photo.name;
-        return (bytes: compressed, name: baseName + '_compressed.jpg');
-      }
-    } catch (_) {
-      // Compression is optional. Keep and upload the original HEIC bytes.
-    }
     return (bytes: originalBytes, name: photo.name);
   }
-
-  Future<void> _cachePhoto(XFile photo) async {
-    final prepared = await _photoUploadData(photo);
+ await _photoUploadData(photo);
     uploadCache[photo.path] = prepared;
     previewCache[photo.path] = prepared.bytes;
   }
