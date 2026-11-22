@@ -44,7 +44,7 @@ class AuthDialog extends StatefulWidget {
 class _AuthDialogState extends State<AuthDialog> {
   final email = TextEditingController();
   final password = TextEditingController();
-  bool signup = false, waiting = false;
+  bool signup = false, waiting = false, showPassword = false;
   @override void dispose() {
     email.dispose();
     password.dispose();
@@ -67,9 +67,9 @@ class _AuthDialogState extends State<AuthDialog> {
     } on AuthException catch (e) {
       if (mounted) {
         final invalid = e.statusCode == '400' || e.code == 'invalid_credentials' || e.message.toLowerCase().contains('invalid login credentials');
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(invalid
-          ? 'الإيميل أو كلمة المرور غير صحيحة - أو أنشئ حساب جديد'
-          : (signup ? 'تعذر إنشاء الحساب. تحقق من البيانات وحاول مجدداً' : 'تعذر تسجيل الدخول. حاول مرة أخرى'))));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: invalid
+          ? Column(mainAxisSize: MainAxisSize.min, children: [const Text('الإيميل أو كلمة المرور غير صحيحة - أو أنشئ حساب جديد'), TextButton(onPressed: resetPassword, child: const Text('نسيت كلمة المرور؟'))])
+          : Text(signup ? 'تعذر إنشاء الحساب. تحقق من البيانات وحاول مجدداً' : 'تعذر تسجيل الدخول. حاول مرة أخرى')));
       }
     } catch (_) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('حدث خطأ. تحقق من الاتصال وحاول مرة أخرى')));
@@ -77,11 +77,16 @@ class _AuthDialogState extends State<AuthDialog> {
       if (mounted) setState(() => waiting = false);
     }
   }
+  Future<void> resetPassword() async {
+    if (email.text.trim().isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('أدخل بريدك الإلكتروني أولاً'))); return; }
+    try { await Supabase.instance.client.auth.resetPasswordForEmail(email.text.trim()); if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك'))); }
+    on AuthException catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message))); }
+  }
   @override Widget build(BuildContext context) => AlertDialog(
     title: Text(signup ? 'إنشاء حساب' : 'تسجيل الدخول'),
     content: Column(mainAxisSize: MainAxisSize.min, children: [
       TextField(controller: email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'البريد الإلكتروني')),
-      TextField(controller: password, obscureText: true, decoration: const InputDecoration(labelText: 'كلمة المرور')),
+      TextField(controller: password, obscureText: !showPassword, decoration: InputDecoration(labelText: 'كلمة المرور', suffixIcon: IconButton(icon: Icon(showPassword ? Icons.visibility_off : Icons.visibility), onPressed: () => setState(() => showPassword = !showPassword)))),
       TextButton(onPressed: waiting ? null : () => setState(() => signup = !signup), child: Text(signup ? 'لديك حساب؟ تسجيل الدخول' : 'إنشاء حساب جديد')),
     ]),
     actions: [
@@ -202,7 +207,7 @@ class _MarketHomeState extends State<MarketHome> {
       bottomNavigationBar: SafeArea(
         top: false,
         child: Container(
-          height: 74,
+          height: 82,
           decoration: const BoxDecoration(
             color: Colors.white,
             border: Border(top: BorderSide(color: Color(0xFFE8E8E8))),
