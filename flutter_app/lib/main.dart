@@ -7,6 +7,8 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:mime/mime.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -664,9 +666,33 @@ class _AddAdPageState extends State<AddAdPage> {
   ]);
 
   Future<({Uint8List bytes, String name})> _photoUploadData(XFile photo) async {
-    // Preserve the exact bytes and original filename, including HEIC/HEIF.
     final originalBytes = await photo.readAsBytes();
-    return (bytes: originalBytes, name: photo.name);
+    final mimeType = lookupMimeType(photo.name, headerBytes: originalBytes)?.toLowerCase();
+    final extension = photo.name.contains('.')
+        ? photo.name.split('.').last.toLowerCase()
+        : '';
+    final isHeic = mimeType == 'image/heic' ||
+        mimeType == 'image/heif' ||
+        extension == 'heic' ||
+        extension == 'heif';
+    if (!isHeic) {
+      return (bytes: originalBytes, name: photo.name);
+    }
+
+    // Supabase Storage rejects image/heic in this project: convert the actual
+    // image bytes to JPEG before preview, test upload, or publishing.
+    final jpegBytes = await FlutterImageCompress.compressWithList(
+      originalBytes,
+      format: CompressFormat.jpeg,
+      quality: 95,
+      keepExif: false,
+    );
+    if (jpegBytes.isEmpty) {
+      throw Exception('تعذر تحويل صورة HEIC إلى JPEG');
+    }
+    final dot = photo.name.lastIndexOf('.');
+    final baseName = dot > 0 ? photo.name.substring(0, dot) : photo.name;
+    return (bytes: Uint8List.fromList(jpegBytes), name: '$baseName.jpg');
   }
 
   Future<void> _cachePhoto(XFile photo) async {
@@ -724,7 +750,14 @@ class _AddAdPageState extends State<AddAdPage> {
             : 'jpg';
         final path = '__photo_test__/' + testFolder + '/' + i.toString() + '_' +
             DateTime.now().microsecondsSinceEpoch.toString() + '.' + extension;
-        await storage.uploadBinary(path, prepared.bytes, fileOptions: const FileOptions(upsert: false));
+        await storage.uploadBinary(
+          path,
+          prepared.bytes,
+          fileOptions: FileOptions(
+            contentType: lookupMimeType(path) ?? 'image/jpeg',
+            upsert: false,
+          ),
+        );
         uploadedPaths.add(path);
       }
       await storage.remove(uploadedPaths);
@@ -872,7 +905,28 @@ class _AddAdPageState extends State<AddAdPage> {
                           errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFEAEAEA), child: Icon(Icons.image_not_supported_outlined, color: Colors.black38)),
                         ),
                       ),
-                      Positioned(right: 0, top: 0, child: IconButton(padding: EdgeInsets.zero, onPressed: () => setState(() { final removed = photos.removeAt(i); previewCache.remove(removed.path); uploadCache.remove(removed.path); }), icon: const Icon(Icons.close, color: Colors.red, size: 20))),
+                      Positioned(
+                        right: 3,
+                        top: 3,
+                        child: GestureDetector(
+                          onTap: () => setState(() {
+                            final removed = photos.removeAt(i);
+                            previewCache.remove(removed.path);
+                            uploadCache.remove(removed.path);
+                          }),
+                          child: Container(
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 1),
+                            ),
+                            alignment: Alignment.center,
+                            child: const Icon(Icons.close, color: Colors.white, size: 15),
+                          ),
+                        ),
+                      ),
                       Positioned(left: 3, bottom: 3, child: Container(padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2), decoration: BoxDecoration(color: i == 0 ? green : Colors.black54, borderRadius: BorderRadius.circular(8)), child: Text(i == 0 ? 'الغلاف' : '${i + 1}', style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)))),
                     ],
                   ),
