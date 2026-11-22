@@ -1029,12 +1029,22 @@ class _MyAdsPageState extends State<MyAdsPage> {
   }));
 }
 
+class _EditableAdPhoto {
+  final String? url;
+  final Uint8List? bytes;
+  final String? name;
+  const _EditableAdPhoto.existing(this.url) : bytes = null, name = null;
+  const _EditableAdPhoto.added(this.bytes, this.name) : url = null;
+  bool get isNew => bytes != null;
+}
+
 class EditAdPage extends StatefulWidget {
   final MarketListing ad;
   const EditAdPage({super.key, required this.ad});
   @override State<EditAdPage> createState() => _EditAdPageState();
 }
 class _EditAdPageState extends State<EditAdPage> {
+  final picker = ImagePicker();
   late final title = TextEditingController(text: widget.ad.title);
   late final description = TextEditingController(text: widget.ad.description);
   late final city = TextEditingController(text: widget.ad.city);
@@ -1042,18 +1052,172 @@ class _EditAdPageState extends State<EditAdPage> {
   late final phone = TextEditingController(text: widget.ad.phone ?? '');
   late final price = TextEditingController(text: widget.ad.price?.toString() ?? '');
   late String currency = widget.ad.currency;
+  late final List<_EditableAdPhoto> photos =
+      widget.ad.photos.map((url) => _EditableAdPhoto.existing(url)).toList();
   bool saving = false;
-  @override void dispose() { title.dispose(); description.dispose(); city.dispose(); district.dispose(); phone.dispose(); price.dispose(); super.dispose(); }
+  bool picking = false;
+  @override void dispose() {
+    title.dispose(); description.dispose(); city.dispose(); district.dispose(); phone.dispose(); price.dispose();
+    super.dispose();
+  }
+
+  void _message(String value) {
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(value)));
+  }
+
+  Future<void> _addPhotos({required bool camera}) async {
+    if (picking || saving) return;
+    final remaining = 8 - photos.length;
+    if (remaining <= 0) { _message('الحد الأقصى 8 صور'); return; }
+    setState(() => picking = true);
+    try {
+      final selected = camera ? await picker.pickImage(source: ImageSource.camera) : null;
+      final List<XFile> files;
+      if (camera) {
+        files = selected == null ? <XFile>[] : <XFile>[selected];
+      } else {
+        files = await picker.pickMultiImage(imageQuality: 100);
+      }
+      if (!mounted || files.isEmpty) return;
+      final accepted = files.take(remaining).toList();
+      final added = <_EditableAdPhoto>[];
+      for (final file in accepted) {
+        try {
+          final bytes = await file.readAsBytes();
+          added.add(_EditableAdPhoto.added(bytes, file.name));
+        } catch (_) {
+          _message('تعذر قراءة إحدى الصور، حاول اختيارها مرة أخرى');
+        }
+      }
+      if (!mounted) return;
+      setState(() => photos.addAll(added));
+      if (files.length > accepted.length) _message('تمت إضافة الصور ضمن الحد الأقصى وهو 8 صور');
+    } catch (_) {
+      _message(camera ? 'تعذر التقاط الصورة' : 'تعذر اختيار الصور من الألبوم');
+    } finally {
+      if (mounted) setState(() => picking = false);
+    }
+  }
+
+  Widget _photoImage(_EditableAdPhoto photo, {BoxFit fit = BoxFit.cover}) {
+    if (photo.isNew) {
+      return Image.memory(photo.bytes!, fit: fit,
+        errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFEAEAEA), child: Icon(Icons.broken_image_outlined)));
+    }
+    return Image.network(photo.url!, fit: fit,
+      errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFFEAEAEA), child: Icon(Icons.broken_image_outlined)));
+  }
+
+  Widget _photosEditor() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text('صور الإعلان (${photos.length}/8)', style: const TextStyle(fontWeight: FontWeight.w900)),
+        const Text('الأولى هي الغلاف', style: TextStyle(fontSize: 11, color: Colors.black54)),
+      ]),
+      const SizedBox(height: 8),
+      Container(
+        height: 210, alignment: Alignment.center,
+        decoration: BoxDecoration(color: const Color(0xFFF2F2F2), borderRadius: BorderRadius.circular(12)),
+        child: photos.isEmpty ? const Text('لا توجد صور') : _photoImage(photos.first, fit: BoxFit.contain),
+      ),
+      if (photos.isNotEmpty) ...[
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 100,
+          child: ReorderableListView(
+            scrollDirection: Axis.horizontal,
+            onReorder: (oldIndex, newIndex) {
+              setState(() {
+                if (newIndex > oldIndex) newIndex--;
+                final item = photos.removeAt(oldIndex);
+                photos.insert(newIndex, item);
+              });
+            },
+            children: [
+              for (var i = 0; i < photos.length; i++)
+                Container(
+                  key: ValueKey(photos[i].isNew ? 'new-${identityHashCode(photos[i])}' : photos[i].url),
+                  width: 88,
+                  margin: const EdgeInsets.all(4),
+                  child: Stack(fit: StackFit.expand, children: [
+                    GestureDetector(
+                      onTap: () => setState(() {
+                        final item = photos.removeAt(i);
+                        photos.insert(0, item);
+                      }),
+                      child: ClipRRect(borderRadius: BorderRadius.circular(8), child: _photoImage(photos[i])),
+                    ),
+                    Positioned(right: 0, top: 0, child: Material(
+                      color: Colors.white.withOpacity(0.9), shape: const CircleBorder(),
+                      child: IconButton(
+                        constraints: const BoxConstraints.tightFor(width: 30, height: 30),
+                        padding: EdgeInsets.zero,
+                        tooltip: 'حذف الصورة',
+                        onPressed: saving ? null : () => setState(() => photos.removeAt(i)),
+                        icon: const Icon(Icons.close, color: Colors.red, size: 19),
+                      ),
+                    )),
+                    Positioned(left: 3, bottom: 3, child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                      decoration: BoxDecoration(color: i == 0 ? green : Colors.black54, borderRadius: BorderRadius.circular(7)),
+                      child: Text(i == 0 ? 'الغلاف' : '${i + 1}', style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+                    )),
+                  ]),
+                ),
+            ],
+          ),
+        ),
+      ],
+      const SizedBox(height: 8),
+      Row(children: [
+        Expanded(child: OutlinedButton.icon(
+          onPressed: saving || picking || photos.length >= 8 ? null : () => _addPhotos(camera: false),
+          icon: const Icon(Icons.photo_library_outlined), label: const Text('إضافة من الألبوم'),
+        )),
+        const SizedBox(width: 8),
+        Expanded(child: OutlinedButton.icon(
+          onPressed: saving || picking || photos.length >= 8 ? null : () => _addPhotos(camera: true),
+          icon: const Icon(Icons.camera_alt_outlined), label: const Text('الكاميرا'),
+        )),
+      ]),
+      const Text('اسحب الصور لتغيير ترتيبها، أو اضغط صورة لتعيينها غلافاً. لا تُحذف الصورة القديمة من التخزين إلا بعد الضغط على ❌ ثم حفظ التعديلات.',
+        style: TextStyle(fontSize: 11, color: Colors.black54)),
+    ],
+  );
+
   Future<void> save() async {
     if (saving) return;
+    if (photos.isEmpty) { _message('يجب إبقاء صورة واحدة على الأقل للإعلان'); return; }
     setState(() => saving = true);
     try {
-      await MarketService.instance.updateListing(id: widget.ad.id, title: title.text, description: description.text, city: city.text, district: district.text, phone: phone.text, price: widget.ad.category == 'free' ? 0 : num.tryParse(price.text), currency: currency);
+      final newPhotos = photos.where((photo) => photo.isNew).toList();
+      final newPhotoBytes = newPhotos.map((photo) => photo.bytes!).toList();
+      final newPhotoNames = newPhotos.map((photo) => photo.name!).toList();
+      final photoOrder = photos.map((photo) {
+        if (photo.isNew) return -(newPhotos.indexOf(photo) + 1);
+        return widget.ad.photos.indexOf(photo.url!);
+      }).toList();
+      await MarketService.instance.updateListing(
+        id: widget.ad.id,
+        title: title.text,
+        description: description.text,
+        city: city.text,
+        district: district.text,
+        phone: phone.text,
+        price: widget.ad.category == 'free' ? 0 : num.tryParse(price.text),
+        currency: currency,
+        originalPhotoUrls: widget.ad.photos,
+        photoOrder: photoOrder,
+        newPhotoBytes: newPhotoBytes,
+        newPhotoNames: newPhotoNames,
+      );
       if (mounted) Navigator.pop(context, true);
     } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تعذر حفظ التعديلات. تحقق من البيانات وحاول مجدداً')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تعذر حفظ التعديلات أو رفع الصور. لم تُحذف الصور القديمة من التخزين قبل نجاح الحفظ.')));
     } finally { if (mounted) setState(() => saving = false); }
   }
+
   @override Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('تعديل الإعلان')),
     body: ListView(padding: const EdgeInsets.all(16), children: [
@@ -1064,11 +1228,12 @@ class _EditAdPageState extends State<EditAdPage> {
       TextField(controller: phone, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'رقم الهاتف')),
       if (widget.ad.category != 'free') ...[
         TextField(controller: price, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'السعر')),
-        DropdownButton<String>(value: currency, items: const [DropdownMenuItem(value: 'SYP', child: Text('ل.س')), DropdownMenuItem(value: 'USD', child: Text('USD'))], onChanged: (v) => setState(() => currency = v ?? 'SYP')),
+        DropdownButton<String>(value: currency, items: const [DropdownMenuItem(value: 'SYP', child: Text('ل.س')), DropdownMenuItem(value: 'USD', child: Text('USD'))], onChanged: saving ? null : (v) => setState(() => currency = v ?? 'SYP')),
       ],
       const SizedBox(height: 16),
-      FilledButton(onPressed: saving ? null : save, child: Text(saving ? 'جارٍ الحفظ...' : 'حفظ التعديلات')),
-      const Padding(padding: EdgeInsets.only(top: 8), child: Text('صور الإعلان الحالية محفوظة كما هي؛ تعديل الصور غير متاح في هذه الشاشة.', style: TextStyle(fontSize: 11, color: Colors.black54))),
+      _photosEditor(),
+      const SizedBox(height: 16),
+      FilledButton(onPressed: saving || picking ? null : save, child: Text(saving ? 'جارٍ الحفظ...' : 'حفظ التعديلات')),
     ]),
   );
 }

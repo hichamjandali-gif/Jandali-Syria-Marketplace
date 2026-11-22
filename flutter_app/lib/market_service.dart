@@ -99,18 +99,85 @@ class MarketService {
     }
   }
 
-  Future<void> updateListing({required String id, required String title, required String description, required String city, String? district, String? phone, num? price, required String currency}) async {
-    final u=user;if(u==null)throw Exception('سجّل الدخول');
-    if(title.trim().isEmpty||city.trim().isEmpty)throw Exception('أدخل عنوان الإعلان والمدينة');
-    await db.from('market_listings').update({
-      'title':title.trim(),
-      'description':description.trim().isEmpty?title.trim():description.trim(),
-      'city':city.trim(),
-      'district':district?.trim().isEmpty==true?null:district?.trim(),
-      'contact_phone':phone?.trim().isEmpty==true?null:phone?.trim(),
-      'price':price,
-      'currency':currency,
-    }).eq('id',id).eq('owner_id',u.id);
+  String? _marketPhotoStoragePath(String publicUrl) {
+    final uri = Uri.tryParse(publicUrl);
+    if (uri == null) return null;
+    const marker = '/storage/v1/object/public/market-photos/';
+    final index = uri.path.indexOf(marker);
+    if (index < 0) return null;
+    return Uri.decodeComponent(uri.path.substring(index + marker.length));
+  }
+
+  Future<void> updateListing({
+    required String id,
+    required String title,
+    required String description,
+    required String city,
+    String? district,
+    String? phone,
+    num? price,
+    required String currency,
+    required List<String> originalPhotoUrls,
+    required List<int> photoOrder,
+    required List<Uint8List> newPhotoBytes,
+    required List<String> newPhotoNames,
+  }) async {
+    final u = user;
+    if (u == null) throw Exception('سجّل الدخول');
+    if (title.trim().isEmpty || city.trim().isEmpty) throw Exception('أدخل عنوان الإعلان والمدينة');
+    if (photoOrder.isEmpty || photoOrder.length > 8) throw Exception('يجب اختيار صورة واحدة على الأقل وبحد أقصى 8 صور');
+    if (newPhotoBytes.length != newPhotoNames.length) throw Exception('بيانات الصور غير مكتملة');
+
+    final storage = db.storage.from('market-photos');
+    final uploadedPaths = <String>[];
+    final orderedUrls = <String>[];
+    try {
+      for (var position = 0; position < photoOrder.length; position++) {
+        final token = photoOrder[position];
+        if (token >= 0) {
+          if (token >= originalPhotoUrls.length) throw Exception('ترتيب الصور غير صالح');
+          orderedUrls.add(originalPhotoUrls[token]);
+          continue;
+        }
+        final newIndex = -token - 1;
+        if (newIndex < 0 || newIndex >= newPhotoBytes.length) throw Exception('مرجع الصورة الجديدة غير صالح');
+        final bytes = newPhotoBytes[newIndex];
+        final original = newPhotoNames[newIndex];
+        final match = RegExp(r'\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)(?:$|[._])', caseSensitive:false).firstMatch(original);
+        final ext = (match?.group(1) ?? 'jpg').toLowerCase();
+        final path = u.id + '/' + id + '/' + position.toString().padLeft(2, '0') + '_' + _uuid.v4() + '.' + ext;
+        final mime = lookupMimeType(original, headerBytes: bytes) ??
+            (ext == 'heic' ? 'image/heic' : ext == 'heif' ? 'image/heif' : 'application/octet-stream');
+        await storage.uploadBinary(path, bytes, fileOptions: FileOptions(contentType:mime, upsert:false));
+        uploadedPaths.add(path);
+        orderedUrls.add(storage.getPublicUrl(path));
+      }
+
+      final keptExisting = orderedUrls.toSet();
+      final removedUrls = originalPhotoUrls.where((url) => !keptExisting.contains(url)).toList();
+      final saved = await db.from('market_listings').update({
+        'title':title.trim(),
+        'description':description.trim().isEmpty?title.trim():description.trim(),
+        'city':city.trim(),
+        'district':district?.trim().isEmpty==true?null:district?.trim(),
+        'contact_phone':phone?.trim().isEmpty==true?null:phone?.trim(),
+        'price':price,
+        'currency':currency,
+        'photo_urls':orderedUrls,
+      }).eq('id',id).eq('owner_id',u.id).select('id').maybeSingle();
+      if (saved == null) throw Exception('لم يتم العثور على الإعلان أو لا تملك صلاحية تعديله');
+
+      // Delete only images explicitly removed in the editor, and only after the listing update succeeds.
+      final removedPaths = removedUrls.map(_marketPhotoStoragePath).whereType<String>().toList();
+      if (removedPaths.isNotEmpty) {
+        try { await storage.remove(removedPaths); } catch (_) { /* Keep the saved listing if storage cleanup fails. */ }
+      }
+    } catch (_) {
+      if (uploadedPaths.isNotEmpty) {
+        try { await storage.remove(uploadedPaths); } catch (_) {}
+      }
+      rethrow;
+    }
   }
 
   Future<void> closeListing(String id) async {
