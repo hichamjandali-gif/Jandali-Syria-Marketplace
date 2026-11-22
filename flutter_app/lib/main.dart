@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -80,13 +81,14 @@ class _AuthDialogState extends State<AuthDialog> {
   Future<void> resetPassword() async {
     if (email.text.trim().isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('أدخل بريدك الإلكتروني أولاً'))); return; }
     try { await Supabase.instance.client.auth.resetPasswordForEmail(email.text.trim()); if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك'))); }
-    on AuthException catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message))); }
+    on AuthException catch (_) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تعذر إرسال رابط إعادة التعيين. تحقق من البريد وحاول مجدداً'))); }
   }
   @override Widget build(BuildContext context) => AlertDialog(
     title: Text(signup ? 'إنشاء حساب' : 'تسجيل الدخول'),
     content: Column(mainAxisSize: MainAxisSize.min, children: [
       TextField(controller: email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'البريد الإلكتروني')),
       TextField(controller: password, obscureText: !showPassword, decoration: InputDecoration(labelText: 'كلمة المرور', suffixIcon: IconButton(icon: Icon(showPassword ? Icons.visibility_off : Icons.visibility), onPressed: () => setState(() => showPassword = !showPassword)))),
+      if (!signup) Align(alignment: Alignment.centerRight, child: TextButton(onPressed: waiting ? null : resetPassword, child: const Text('نسيت كلمة المرور؟'))),
       TextButton(onPressed: waiting ? null : () => setState(() => signup = !signup), child: Text(signup ? 'لديك حساب؟ تسجيل الدخول' : 'إنشاء حساب جديد')),
     ]),
     actions: [
@@ -453,6 +455,7 @@ class _MarketHomeState extends State<MarketHome> {
                 Expanded(child: TextField(decoration: const InputDecoration(labelText: 'المدينة', isDense: true, border: OutlineInputBorder()), onChanged: (v) => setState(() => city = v))),
               ],
             ),
+            const Align(alignment: Alignment.centerRight, child: Text('تنبيه: نطاق 25 كم معروض في اختيار الموقع، لكن لا يمكن حساب المسافة الفعلية حالياً لأن الإعلانات لا تحفظ إحداثياتها.', style: TextStyle(fontSize: 10, color: Colors.deepOrange))),
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton(
@@ -497,16 +500,26 @@ class _MarketHomeState extends State<MarketHome> {
     return ListView(children: rows.map((r) { return ListTile(leading: const Icon(Icons.chat), title: const Text('محادثة خاصة'), subtitle: Text(r['created_at'].toString()), onTap: () { Navigator.push(context, MaterialPageRoute(builder: (_) => ChatPage(id: r['id'] as String))); }); }).toList());
   });
 
-  Widget accountPage() => ListView(padding: const EdgeInsets.all(16), children: [
-    const CircleAvatar(radius: 34, child: Icon(Icons.person, size: 38)),
-    Center(child: Text(api.user?.email ?? 'زائر', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
-    if (api.user == null) const ListTile(leading: Icon(Icons.person_outline), title: Text('تتصفح كزائر'), subtitle: Text('تسجيل الدخول مطلوب فقط عند إضافة إعلان أو مراسلة بائع'))
-    else ...[
-      ListTile(leading: const Icon(Icons.inventory), title: const Text('إعلاناتي'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyAdsPage()))),
-      ListTile(leading: const Icon(Icons.logout), title: const Text('تسجيل الخروج'), onTap: () async { await Supabase.instance.client.auth.signOut(); if (mounted) setState(() => tab = 0); }),
-    ],
-    const Divider(), const ListTile(title: Text('السوق العربي - By Hicham Jandali'), subtitle: Text('نسخة Flutter تجريبية')),
-  ]);
+  Widget accountPage() {
+    final user = api.user;
+    final metadata = user?.userMetadata ?? const <String, dynamic>{};
+    final displayName = (metadata['full_name'] ?? metadata['name'] ?? metadata['display_name'] ?? '').toString().trim();
+    return ListView(padding: const EdgeInsets.all(16), children: [
+      const CircleAvatar(radius: 34, child: Icon(Icons.person, size: 38)),
+      if (user == null) ...[
+        const Center(child: Text('تتصفح كزائر', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+        const ListTile(leading: Icon(Icons.person_outline), title: Text('تتصفح كزائر'), subtitle: Text('تسجيل الدخول مطلوب فقط عند إضافة إعلان أو مراسلة بائع')),
+        const SizedBox(height: 8),
+        FilledButton.icon(onPressed: () async { final ok = await auth(); if (mounted && ok) setState(() {}); }, icon: const Icon(Icons.login), label: const Text('تسجيل الدخول'), style: FilledButton.styleFrom(backgroundColor: green, minimumSize: const Size.fromHeight(50))),
+      ] else ...[
+        Center(child: Text(displayName.isEmpty ? 'حسابي' : displayName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+        Center(child: Text(user.email ?? '', style: const TextStyle(color: Colors.black54))),
+        ListTile(leading: const Icon(Icons.inventory), title: const Text('إعلاناتي'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyAdsPage()))),
+        ListTile(leading: const Icon(Icons.logout), title: const Text('تسجيل الخروج'), onTap: () async { await Supabase.instance.client.auth.signOut(); if (mounted) setState(() => tab = 0); }),
+      ],
+      const Divider(), const ListTile(title: Text('السوق العربي - By Hicham Jandali'), subtitle: Text('نسخة Flutter')),
+    ]);
+  }
 }
 
 class AdDetailPage extends StatefulWidget {
@@ -560,6 +573,7 @@ class _AddAdPageState extends State<AddAdPage> {
   final List<XFile> photos = [];
   final Map<String, Uint8List> previewCache = {};
   final Map<String, ({Uint8List bytes, String name})> uploadCache = {};
+  final Map<String, TextEditingController> detailControllers = {};
   String category = 'houses', currency = 'SYP';
   bool busy = false;
 
@@ -575,6 +589,7 @@ class _AddAdPageState extends State<AddAdPage> {
   void dispose() {
     voice.stop();
     title.dispose(); desc.dispose(); city.dispose(); district.dispose(); phone.dispose(); price.dispose();
+    for (final controller in detailControllers.values) { controller.dispose(); }
     super.dispose();
   }
 
@@ -594,6 +609,32 @@ class _AddAdPageState extends State<AddAdPage> {
   }
 
   void msg(String s) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s)));
+
+  static const Map<String, List<String>> _categoryFields = {
+    'houses':['نوع العقار','نوع العرض (بيع/إيجار)','المساحة','عدد الغرف','الطابق'],
+    'cars':['الماركة','الموديل','سنة الصنع','عدد الكيلومترات','نوع الوقود'],
+    'free':['نوع الغرض','حالة الغرض','طريقة الاستلام'],
+    'jobs':['المسمى الوظيفي','نوع العمل','الراتب','الخبرة المطلوبة'],
+    'clothes':['نوع الملابس','المقاس','الفئة (رجالي/نسائي/أطفال)','الحالة'],
+    'phones':['الماركة','الموديل','سعة التخزين','حالة الجهاز'],
+    'animals':['نوع الحيوان','العمر','العدد','السلالة'],
+    'services':['نوع الخدمة','المهنة','سنوات الخبرة','نطاق الخدمة'],
+    'furniture':['نوع الأثاث','الخامة','الحالة','الأبعاد'],
+    'bikes':['الماركة','الموديل','سنة الصنع','الحالة'],
+    'kitchen':['نوع الأداة','المادة','الحالة','العدد'],
+  };
+  List<String> get _fieldsForCategory => _categoryFields[category] ?? const [];
+  TextEditingController _detailController(String field) => detailControllers.putIfAbsent(field, () => TextEditingController());
+  String _descriptionWithDetails() {
+    final values = _fieldsForCategory.map((field) => MapEntry(field, _detailController(field).text.trim())).where((e) => e.value.isNotEmpty).toList();
+    final details = values.map((e) => '${e.key}: ${e.value}').join('\\n');
+    final base = desc.text.trim();
+    return details.isEmpty ? base : '$base\\n\\nتفاصيل القسم:\\n$details';
+  }
+  Widget _categorySpecificFields() => Column(children: [
+    const Align(alignment: Alignment.centerRight, child: Padding(padding: EdgeInsets.only(top: 8), child: Text('معلومات خاصة بهذا القسم', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13)))),
+    for (final field in _fieldsForCategory) TextField(controller: _detailController(field), decoration: InputDecoration(labelText: field)),
+  ]);
 
   Future<({Uint8List bytes, String name})> _photoUploadData(XFile photo) async {
     // Preserve the exact bytes and original filename, including HEIC/HEIF.
@@ -654,7 +695,7 @@ class _AddAdPageState extends State<AddAdPage> {
       }
       await MarketService.instance.publish(
         title: title.text,
-        description: desc.text,
+        description: _descriptionWithDetails(),
         category: category,
         city: city.text,
         district: district.text,
@@ -817,6 +858,7 @@ class _AddAdPageState extends State<AddAdPage> {
       ),
       TextField(controller: title, decoration: const InputDecoration(labelText: 'عنوان الإعلان')),
       TextField(controller: desc, maxLines: 4, decoration: const InputDecoration(labelText: 'التفاصيل والوصف')),
+      _categorySpecificFields(),
       OutlinedButton.icon(onPressed: dictateDescription, icon: Icon(recording ? Icons.mic : Icons.mic_none, color: green), label: Text(recording ? 'يتم الاستماع...' : 'أضف إعلانك بالصوت - تحدث لوصف الإعلان')),
       Row(
         children: [
@@ -910,6 +952,73 @@ class _MyAdsPageState extends State<MyAdsPage> {
     if (s.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
     if (s.hasError) return Center(child: Text(s.error.toString()));
     final rows = s.data ?? [];
-    return ListView(children: rows.map((x) => ListTile(title: Text(x.title), subtitle: Text(x.location + ' • ' + x.status), trailing: PopupMenuButton<String>(onSelected: (v) async { try { if (v == 'close') await MarketService.instance.closeListing(x.id); if (v == 'delete') await MarketService.instance.deleteListing(x.id); setState(() => future = MarketService.instance.myListings()); } catch (e) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()))); } }, itemBuilder: (_) => const [PopupMenuItem(value: 'close', child: Text('إيقاف')), PopupMenuItem(value: 'delete', child: Text('حذف'))]))).toList());
+    return ListView(children: rows.map((x) => ListTile(
+      title: Text(x.title), subtitle: Text(x.location + ' • ' + x.status),
+      trailing: PopupMenuButton<String>(
+        onSelected: (v) async {
+          if (v == 'edit') {
+            final changed = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => EditAdPage(ad: x)));
+            if (changed == true && mounted) setState(() => future = MarketService.instance.myListings());
+            return;
+          }
+          try {
+            if (v == 'close') await MarketService.instance.closeListing(x.id);
+            if (v == 'delete') await MarketService.instance.deleteListing(x.id);
+            if (mounted) setState(() => future = MarketService.instance.myListings());
+          } catch (_) {
+            if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تعذر تنفيذ العملية. حاول مرة أخرى')));
+          }
+        },
+        itemBuilder: (_) => const [
+          PopupMenuItem(value: 'edit', child: Text('تعديل الإعلان')),
+          PopupMenuItem(value: 'close', child: Text('إيقاف')),
+          PopupMenuItem(value: 'delete', child: Text('حذف')),
+        ],
+      ),
+    )).toList());
   }));
+}
+
+class EditAdPage extends StatefulWidget {
+  final MarketListing ad;
+  const EditAdPage({super.key, required this.ad});
+  @override State<EditAdPage> createState() => _EditAdPageState();
+}
+class _EditAdPageState extends State<EditAdPage> {
+  late final title = TextEditingController(text: widget.ad.title);
+  late final description = TextEditingController(text: widget.ad.description);
+  late final city = TextEditingController(text: widget.ad.city);
+  late final district = TextEditingController(text: widget.ad.district ?? '');
+  late final phone = TextEditingController(text: widget.ad.phone ?? '');
+  late final price = TextEditingController(text: widget.ad.price?.toString() ?? '');
+  late String currency = widget.ad.currency;
+  bool saving = false;
+  @override void dispose() { title.dispose(); description.dispose(); city.dispose(); district.dispose(); phone.dispose(); price.dispose(); super.dispose(); }
+  Future<void> save() async {
+    if (saving) return;
+    setState(() => saving = true);
+    try {
+      await MarketService.instance.updateListing(id: widget.ad.id, title: title.text, description: description.text, city: city.text, district: district.text, phone: phone.text, price: widget.ad.category == 'free' ? 0 : num.tryParse(price.text), currency: currency);
+      if (mounted) Navigator.pop(context, true);
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تعذر حفظ التعديلات. تحقق من البيانات وحاول مجدداً')));
+    } finally { if (mounted) setState(() => saving = false); }
+  }
+  @override Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('تعديل الإعلان')),
+    body: ListView(padding: const EdgeInsets.all(16), children: [
+      TextField(controller: title, decoration: const InputDecoration(labelText: 'عنوان الإعلان')),
+      TextField(controller: description, maxLines: 5, decoration: const InputDecoration(labelText: 'الوصف والتفاصيل')),
+      TextField(controller: city, decoration: const InputDecoration(labelText: 'المدينة')),
+      TextField(controller: district, decoration: const InputDecoration(labelText: 'الحي')),
+      TextField(controller: phone, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'رقم الهاتف')),
+      if (widget.ad.category != 'free') ...[
+        TextField(controller: price, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'السعر')),
+        DropdownButton<String>(value: currency, items: const [DropdownMenuItem(value: 'SYP', child: Text('ل.س')), DropdownMenuItem(value: 'USD', child: Text('USD'))], onChanged: (v) => setState(() => currency = v ?? 'SYP')),
+      ],
+      const SizedBox(height: 16),
+      FilledButton(onPressed: saving ? null : save, child: Text(saving ? 'جارٍ الحفظ...' : 'حفظ التعديلات')),
+      const Padding(padding: EdgeInsets.only(top: 8), child: Text('صور الإعلان الحالية محفوظة كما هي؛ تعديل الصور غير متاح في هذه الشاشة.', style: TextStyle(fontSize: 11, color: Colors.black54))),
+    ]),
+  );
 }
