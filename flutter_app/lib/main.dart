@@ -458,7 +458,7 @@ class _MarketHomeState extends State<MarketHome> {
                 Expanded(child: TextField(decoration: const InputDecoration(labelText: 'المدينة', isDense: true, border: OutlineInputBorder()), onChanged: (v) => setState(() => city = v))),
               ],
             ),
-            const Align(alignment: Alignment.centerRight, child: Text('تنبيه: نطاق 25 كم معروض في اختيار الموقع، لكن لا يمكن حساب المسافة الفعلية حالياً لأن الإعلانات لا تحفظ إحداثياتها.', style: TextStyle(fontSize: 10, color: Colors.deepOrange))),
+            const Align(alignment: Alignment.centerRight, child: Text('تنبيه: نطاق البحث المختار لا يُطبّق كمسافة فعلية حالياً لأن الإعلانات لا تحفظ إحداثياتها.', style: TextStyle(fontSize: 10, color: Colors.deepOrange))),
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton(
