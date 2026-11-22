@@ -774,6 +774,16 @@ class _AddAdPageState extends State<AddAdPage> {
   }
 
   Future<void> publish() async {
+    // The publish action is always visible. If the visitor is not authenticated,
+    // request sign-in here before uploading any permanent listing photos.
+    if (MarketService.instance.user == null) {
+      final ok = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const AuthDialog(),
+      );
+      if (!mounted || ok != true || MarketService.instance.user == null) return;
+    }
     if (photos.isEmpty) { msg('أضف صورة واحدة على الأقل'); return; }
     if (adPoint == null) { msg('اختر موقع الإعلان من الخريطة قبل النشر'); return; }
     setState(() => busy = true);
@@ -784,7 +794,7 @@ class _AddAdPageState extends State<AddAdPage> {
         bytes.add(prepared.bytes);
         names.add(prepared.name);
       }
-      await MarketService.instance.publish(
+      final id = await MarketService.instance.publish(
         title: title.text,
         description: _descriptionWithDetails(),
         category: category,
@@ -798,9 +808,26 @@ class _AddAdPageState extends State<AddAdPage> {
         lat: adPoint!.latitude,
         lng: adPoint!.longitude,
       );
-      if (mounted) Navigator.pop(context, true);
-    } catch (_) {
-      msg('تعذر نشر الإعلان أو رفع الصور الآن، أعد المحاولة من فضلك');
+      final saved = await Supabase.instance.client
+          .from('market_listings')
+          .select()
+          .eq('id', id)
+          .single();
+      final listing = MarketListing.fromMap(saved);
+      if (!mounted) return;
+      msg('تم نشر الإعلان');
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => AdDetailPage(
+            ad: listing,
+            favorite: false,
+            onFavorite: () {},
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) msg('تعذر نشر الإعلان: ${e.toString()}');
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -991,14 +1018,24 @@ class _AddAdPageState extends State<AddAdPage> {
           ],
         ),
       const SizedBox(height: 13),
-      if (MarketService.instance.user == null)
-        FilledButton(
-          onPressed: busy ? null : testPhotoUpload,
-          style: FilledButton.styleFrom(backgroundColor: green, minimumSize: const Size.fromHeight(48)),
-          child: Text(busy ? 'جارٍ اختبار رفع الصور...' : 'اختبار رفع الصور إلى الخادم'),
-        )
-      else
-        FilledButton(onPressed: busy ? null : publish, style: FilledButton.styleFrom(backgroundColor: green, minimumSize: const Size.fromHeight(48)), child: Text(busy ? 'جارٍ النشر...' : 'نشر الإعلان')),
+      OutlinedButton(
+        onPressed: busy ? null : testPhotoUpload,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: green,
+          minimumSize: const Size.fromHeight(40),
+          side: BorderSide(color: green.withOpacity(0.55)),
+        ),
+        child: Text(busy ? 'جارٍ اختبار رفع الصور...' : 'اختبار رفع الصور إلى الخادم'),
+      ),
+      const SizedBox(height: 8),
+      FilledButton(
+        onPressed: busy ? null : publish,
+        style: FilledButton.styleFrom(
+          backgroundColor: green,
+          minimumSize: const Size.fromHeight(54),
+        ),
+        child: Text(busy ? 'جارٍ النشر...' : 'نشر الإعلان'),
+      ),
     ],
   );
 
