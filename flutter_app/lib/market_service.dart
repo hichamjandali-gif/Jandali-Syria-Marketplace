@@ -74,12 +74,8 @@ class MarketService {
       // Ordered upload: the first selected image is the cover at photo_urls[0].
       for(var i=0;i<photoBytes.length;i++){
         final bytes=photoBytes[i],original=photoNames[i];
-        final rawExt=original.contains('.')?original.split('.').last.toLowerCase():'';
-        final ext=RegExp(r'^[a-z0-9]{2,5}$').hasMatch(rawExt)
-            ? rawExt
-            : original.toLowerCase().contains('heif') ? 'heif'
-            : original.toLowerCase().contains('heic') ? 'heic'
-            : 'jpg';
+        final match=RegExp(r'\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)(?:$|[._])',caseSensitive:false).firstMatch(original);
+        final ext=(match?.group(1)??'jpg').toLowerCase();
         final path=u.id+'/'+id+'/'+i.toString().padLeft(2,'0')+'_'+_uuid.v4()+'.'+ext;
         final mime=lookupMimeType(original,headerBytes:bytes)??
             (ext=='heic'?'image/heic':ext=='heif'?'image/heif':'application/octet-stream');
@@ -100,6 +96,20 @@ class MarketService {
       if(paths.isNotEmpty){try{await storage.remove(paths);}catch(_){}}
       rethrow;
     }
+  }
+
+  Future<void> updateListing({required String id, required String title, required String description, required String city, String? district, String? phone, num? price, required String currency}) async {
+    final u=user;if(u==null)throw Exception('سجّل الدخول');
+    if(title.trim().isEmpty||city.trim().isEmpty)throw Exception('أدخل عنوان الإعلان والمدينة');
+    await db.from('market_listings').update({
+      'title':title.trim(),
+      'description':description.trim().isEmpty?title.trim():description.trim(),
+      'city':city.trim(),
+      'district':district?.trim().isEmpty==true?null:district?.trim(),
+      'contact_phone':phone?.trim().isEmpty==true?null:phone?.trim(),
+      'price':price,
+      'currency':currency,
+    }).eq('id',id).eq('owner_id',u.id);
   }
 
   Future<void> closeListing(String id) async {
