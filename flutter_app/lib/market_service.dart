@@ -4,8 +4,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 const marketCategories = <MarketCategory>[
-  MarketCategory('houses','عقارات','🏠','بيوت وشقق وأراضٍ ومزارع'),
-  MarketCategory('cars','سيارات','🚗','سيارات وموتورات'),
+  MarketCategory('houses','عقارات: بيع وإيجار','🏠','بيوت وشقق وأراضٍ ومزارع'),
+  MarketCategory('cars','سيارات للبيع','🚗','سيارات وموتورات'),
   MarketCategory('free','أغراض مجاناً','🎁','ببلاش - خذ مجاناً'),
   MarketCategory('jobs','وظائف','💼','مطلوب عامل / أبحث عن عمل'),
   MarketCategory('clothes','ملابس','👕','رجالي ونسائي'),
