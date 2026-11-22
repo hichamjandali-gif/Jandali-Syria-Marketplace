@@ -128,6 +128,16 @@ class MarketService {
     final r=await db.from('market_conversations').insert({'listing_id':listing.id,'buyer_id':u.id,'seller_id':listing.ownerId}).select('id').single();
     return r['id'] as String;
   }
+  Future<String> conversationTitle(Map<String,dynamic> conversation) async {
+    final listingId=conversation['listing_id'];
+    if(listingId==null)return 'محادثة خاصة';
+    final row=await db.from('market_listings').select('title,city').eq('id',listingId).maybeSingle();
+    if(row==null)return 'إعلان غير متاح';
+    final title=(row['title']??'إعلان').toString();
+    final city=(row['city']??'').toString();
+    return city.isEmpty?title:'$title • $city';
+  }
+
   Future<List<Map<String,dynamic>>> conversations() async {
     final u=user;if(u==null)throw Exception('سجّل الدخول');
     final r=await db.from('market_conversations').select().or('buyer_id.eq.${u.id},seller_id.eq.${u.id}').order('created_at',ascending:false);
