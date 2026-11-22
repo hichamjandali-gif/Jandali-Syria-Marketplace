@@ -27,14 +27,15 @@ class MarketListing {
   final String id,ownerId,title,description,category,city,currency,status;
   final String? district,phone;
   final num? price;
+  final double? lat,lng;
   final List<String> photos;
   final DateTime? createdAt;
-  const MarketListing({required this.id,required this.ownerId,required this.title,required this.description,required this.category,required this.city,required this.currency,required this.status,required this.photos,this.district,this.phone,this.price,this.createdAt});
+  const MarketListing({required this.id,required this.ownerId,required this.title,required this.description,required this.category,required this.city,required this.currency,required this.status,required this.photos,this.district,this.phone,this.price,this.lat,this.lng,this.createdAt});
   factory MarketListing.fromMap(Map<String,dynamic> m)=>MarketListing(
     id:m['id'] as String,ownerId:m['owner_id'] as String,title:(m['title']??'') as String,
     description:(m['description']??'') as String,category:(m['category']??'houses') as String,
     city:(m['city']??'') as String,district:m['district'] as String?,phone:m['contact_phone'] as String?,
-    price:m['price'] as num?,currency:(m['currency']??'SYP') as String,status:(m['status']??'active') as String,
+    price:m['price'] as num?,lat:(m['lat'] as num?)?.toDouble(),lng:(m['lng'] as num?)?.toDouble(),currency:(m['currency']??'SYP') as String,status:(m['status']??'active') as String,
     photos:(m['photo_urls'] as List? ?? []).whereType<String>().toList(),
     createdAt:DateTime.tryParse('${m['created_at']??''}'));
   String get location=>[city,district].where((x)=>x!=null&&x.trim().isNotEmpty).join(' - ');
@@ -65,7 +66,7 @@ class MarketService {
     return r.map((e)=>MarketListing.fromMap(e)).toList();
   }
 
-  Future<String> publish({required String title,required String description,required String category,required String city,String? district,String? phone,num? price,required String currency,required List<Uint8List> photoBytes,required List<String> photoNames}) async {
+  Future<String> publish({required String title,required String description,required String category,required String city,String? district,String? phone,num? price,required String currency,required List<Uint8List> photoBytes,required List<String> photoNames,required double lat,required double lng}) async {
     final u=user;if(u==null)throw Exception('سجّل الدخول قبل نشر الإعلان');
     if(title.trim().isEmpty||city.trim().isEmpty)throw Exception('أدخل عنوان الإعلان والمدينة');
     if(photoBytes.isEmpty)throw Exception('أضف صورة واحدة على الأقل');
@@ -85,7 +86,7 @@ class MarketService {
       final row=<String,dynamic>{
         'id':id,'owner_id':u.id,'title':title.trim(),
         'description':description.trim().isEmpty?title.trim():description.trim(),
-        'category':category,'city':city.trim(),
+        'category':category,'city':city.trim(),'lat':lat,'lng':lng,
         'district':district?.trim().isEmpty==true?null:district?.trim(),
         'contact_phone':phone?.trim().isEmpty==true?null:phone?.trim(),
         'price':category=='free'?0:price,'currency':currency,'photo_urls':urls,
