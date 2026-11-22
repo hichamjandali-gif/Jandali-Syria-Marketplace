@@ -200,7 +200,7 @@ class _MarketHomeState extends State<MarketHome> {
   }
 
   Future<void> add({bool byVoice = false}) async {
-    if (!await requireLogin() || !mounted) return;
+    // TEMPORARY PHOTO TEST: guests may open the ad form, but cannot publish.
     final ok = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => AddAdPage(voiceFirst: byVoice)));
     if (mounted && ok == true) await load();
   }
@@ -710,6 +710,35 @@ class _AddAdPageState extends State<AddAdPage> {
     if (r != null) { city.text = (r['city'] ?? '').toString(); district.text = (r['district'] ?? '').toString(); adPoint = LatLng((r['lat'] as num).toDouble(), (r['lng'] as num).toDouble()); setState(() {}); }
   }
 
+  Future<void> testPhotoUpload() async {
+    if (photos.isEmpty) { msg('اختر صورة واحدة على الأقل من الألبوم أولاً'); return; }
+    setState(() => busy = true);
+    final storage = Supabase.instance.client.storage.from('market-photos');
+    final uploadedPaths = <String>[];
+    final testFolder = DateTime.now().microsecondsSinceEpoch.toString();
+    try {
+      for (var i = 0; i < photos.length; i++) {
+        final prepared = uploadCache[photos[i].path] ?? await _photoUploadData(photos[i]);
+        final extension = prepared.name.contains('.')
+            ? prepared.name.split('.').last.toLowerCase()
+            : 'jpg';
+        final path = '__photo_test__/' + testFolder + '/' + i.toString() + '_' +
+            DateTime.now().microsecondsSinceEpoch.toString() + '.' + extension;
+        await storage.uploadBinary(path, prepared.bytes, fileOptions: const FileOptions(upsert: false));
+        uploadedPaths.add(path);
+      }
+      await storage.remove(uploadedPaths);
+      if (mounted) msg('نجح رفع ' + uploadedPaths.length.toString() + ' صورة إلى الخادم، ثم حُذفت ملفات الاختبار. لم يتم نشر إعلان.');
+    } catch (e) {
+      if (uploadedPaths.isNotEmpty) {
+        try { await storage.remove(uploadedPaths); } catch (_) {}
+      }
+      if (mounted) msg('فشل اختبار رفع الصور: ' + e.toString());
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
   Future<void> publish() async {
     if (photos.isEmpty) { msg('أضف صورة واحدة على الأقل'); return; }
     if (adPoint == null) { msg('اختر موقع الإعلان من الخريطة قبل النشر'); return; }
@@ -907,7 +936,14 @@ class _AddAdPageState extends State<AddAdPage> {
           ],
         ),
       const SizedBox(height: 13),
-      FilledButton(onPressed: busy ? null : publish, style: FilledButton.styleFrom(backgroundColor: green, minimumSize: const Size.fromHeight(48)), child: Text(busy ? 'جارٍ النشر...' : 'نشر الإعلان')),
+      if (MarketService.instance.user == null)
+        FilledButton(
+          onPressed: busy ? null : testPhotoUpload,
+          style: FilledButton.styleFrom(backgroundColor: green, minimumSize: const Size.fromHeight(48)),
+          child: Text(busy ? 'جارٍ اختبار رفع الصور...' : 'اختبار رفع الصور إلى الخادم'),
+        )
+      else
+        FilledButton(onPressed: busy ? null : publish, style: FilledButton.styleFrom(backgroundColor: green, minimumSize: const Size.fromHeight(48)), child: Text(busy ? 'جارٍ النشر...' : 'نشر الإعلان')),
     ],
   );
 
