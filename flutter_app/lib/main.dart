@@ -462,6 +462,7 @@ class _MarketHomeState extends State<MarketHome> {
               children: [
                 Expanded(
                   child: DropdownButtonFormField<String?>(
+                    isExpanded: true,
                     value: category,
                     decoration: const InputDecoration(labelText: 'القسم', isDense: true, border: OutlineInputBorder()),
                     items: [
