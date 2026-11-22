@@ -206,7 +206,7 @@ class _MarketHomeState extends State<MarketHome> {
           ],
         ),
       ),
-      bottomNavigationBar: SafeArea(
+      bottomNavigationBar: MediaQuery.of(context).viewInsets.bottom > 0 ? null : SafeArea(
         top: false,
         child: Container(
           height: 82,
@@ -497,7 +497,15 @@ class _MarketHomeState extends State<MarketHome> {
     if (s.hasError) return Center(child: Text(s.error.toString()));
     final rows = s.data ?? [];
     if (rows.isEmpty) return const Center(child: Text('لا توجد محادثات بعد'));
-    return ListView(children: rows.map((r) { return ListTile(leading: const Icon(Icons.chat), title: const Text('محادثة خاصة'), subtitle: Text(r['created_at'].toString()), onTap: () { Navigator.push(context, MaterialPageRoute(builder: (_) => ChatPage(id: r['id'] as String))); }); }).toList());
+    return ListView(children: rows.map((r) {
+      final buyer = r['buyer_id'] == api.user?.id;
+      return ListTile(
+        leading: const Icon(Icons.chat),
+        title: FutureBuilder<String>(future: api.conversationTitle(r), builder: (context, title) => Text(title.data ?? 'جارٍ تحميل الإعلان...', maxLines: 1, overflow: TextOverflow.ellipsis)),
+        subtitle: Text((buyer ? 'أنت المشتري' : 'أنت البائع') + ' • ' + r['created_at'].toString()),
+        onTap: () { Navigator.push(context, MaterialPageRoute(builder: (_) => ChatPage(id: r['id'] as String))); },
+      );
+    }).toList());
   });
 
   Widget accountPage() {
@@ -624,12 +632,12 @@ class _AddAdPageState extends State<AddAdPage> {
     'kitchen':['نوع الأداة','المادة','الحالة','العدد'],
   };
   List<String> get _fieldsForCategory => _categoryFields[category] ?? const [];
-  TextEditingController _detailController(String field) => detailControllers.putIfAbsent(field, () => TextEditingController());
+  TextEditingController _detailController(String field) => detailControllers.putIfAbsent('$category::$field', () => TextEditingController());
   String _descriptionWithDetails() {
     final values = _fieldsForCategory.map((field) => MapEntry(field, _detailController(field).text.trim())).where((e) => e.value.isNotEmpty).toList();
-    final details = values.map((e) => '${e.key}: ${e.value}').join('\\n');
+    final details = values.map((e) => '${e.key}: ${e.value}').join('\n');
     final base = desc.text.trim();
-    return details.isEmpty ? base : '$base\\n\\nتفاصيل القسم:\\n$details';
+    return details.isEmpty ? base : '$base\n\nتفاصيل القسم:\n$details';
   }
   Widget _categorySpecificFields() => Column(children: [
     const Align(alignment: Alignment.centerRight, child: Padding(padding: EdgeInsets.only(top: 8), child: Text('معلومات خاصة بهذا القسم', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13)))),
@@ -931,11 +939,31 @@ class _MapPageState extends State<MapPage> {
 
 class ChatPage extends StatefulWidget { final String id; const ChatPage({super.key, required this.id}); @override State<ChatPage> createState() => _ChatPageState(); }
 class _ChatPageState extends State<ChatPage> {
-  final input = TextEditingController(); bool sending = false;
-  @override void dispose() { input.dispose(); super.dispose(); }
-  Future<void> send() async { if (input.text.trim().isEmpty) return; setState(() => sending = true); try { await MarketService.instance.sendMessage(widget.id, input.text); input.clear(); setState(() {}); } catch (e) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()))); } finally { if (mounted) setState(() => sending = false); } }
+  final input = TextEditingController();
+  bool sending = false;
+  late Future<List<Map<String, dynamic>>> messageFuture;
+  Timer? refreshTimer;
+  @override void initState() {
+    super.initState();
+    messageFuture = MarketService.instance.messages(widget.id);
+    refreshTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (mounted) setState(() => messageFuture = MarketService.instance.messages(widget.id));
+    });
+  }
+  @override void dispose() { refreshTimer?.cancel(); input.dispose(); super.dispose(); }
+  Future<void> send() async {
+    if (input.text.trim().isEmpty) return;
+    setState(() => sending = true);
+    try {
+      await MarketService.instance.sendMessage(widget.id, input.text);
+      input.clear();
+      if (mounted) setState(() => messageFuture = MarketService.instance.messages(widget.id));
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تعذر إرسال الرسالة. حاول مرة أخرى')));
+    } finally { if (mounted) setState(() => sending = false); }
+  }
   @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('محادثة خاصة')), body: Column(children: [
-    Expanded(child: FutureBuilder<List<Map<String, dynamic>>>(future: MarketService.instance.messages(widget.id), builder: (c, s) {
+    Expanded(child: FutureBuilder<List<Map<String, dynamic>>>(future: messageFuture, builder: (c, s) {
       if (s.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
       if (s.hasError) return Center(child: Text(s.error.toString()));
       return ListView(padding: const EdgeInsets.all(12), children: (s.data ?? []).map((m) { final mine = m['sender_id'] == MarketService.instance.user?.id; return Align(alignment: mine ? Alignment.centerRight : Alignment.centerLeft, child: Container(margin: const EdgeInsets.all(4), padding: const EdgeInsets.all(12), constraints: const BoxConstraints(maxWidth: 300), decoration: BoxDecoration(color: mine ? const Color(0xFFDDF3E3) : Colors.white, borderRadius: BorderRadius.circular(12)), child: Text(m['body'].toString()))); }).toList());
