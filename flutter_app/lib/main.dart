@@ -45,10 +45,12 @@ class AuthDialog extends StatefulWidget {
 class _AuthDialogState extends State<AuthDialog> {
   final email = TextEditingController();
   final password = TextEditingController();
+  final displayName = TextEditingController();
   bool signup = false, waiting = false, showPassword = false;
   @override void dispose() {
     email.dispose();
     password.dispose();
+    displayName.dispose();
     super.dispose();
   }
   Future<void> submit() async {
@@ -57,7 +59,7 @@ class _AuthDialogState extends State<AuthDialog> {
     try {
       final auth = Supabase.instance.client.auth;
       final response = signup
-          ? await auth.signUp(email: email.text.trim(), password: password.text)
+          ? await auth.signUp(email: email.text.trim(), password: password.text, data: {'full_name': displayName.text.trim()})
           : await auth.signInWithPassword(email: email.text.trim(), password: password.text);
       if (!mounted) return;
       if (response.user != null && response.session != null) {
@@ -86,6 +88,7 @@ class _AuthDialogState extends State<AuthDialog> {
   @override Widget build(BuildContext context) => AlertDialog(
     title: Text(signup ? 'إنشاء حساب' : 'تسجيل الدخول'),
     content: Column(mainAxisSize: MainAxisSize.min, children: [
+      if (signup) TextField(controller: displayName, decoration: const InputDecoration(labelText: 'اسمك')),
       TextField(controller: email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'البريد الإلكتروني')),
       TextField(controller: password, obscureText: !showPassword, decoration: InputDecoration(labelText: 'كلمة المرور', suffixIcon: IconButton(icon: Icon(showPassword ? Icons.visibility_off : Icons.visibility), onPressed: () => setState(() => showPassword = !showPassword)))),
       if (!signup) Align(alignment: Alignment.centerRight, child: TextButton(onPressed: waiting ? null : resetPassword, child: const Text('نسيت كلمة المرور؟'))),
