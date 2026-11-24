@@ -127,7 +127,7 @@ jobs:
                   </intent-filter>
           """
           if 'android:scheme="jandaliarabmarket"' not in m:
-              m = m.replace('</activity>', deep_link + '\\n            </activity>', 1)
+              m = m.replace('</activity>', deep_link + '\n            </activity>', 1)
           if 'android:scheme="jandaliarabmarket"' not in m:
               raise SystemExit("Email confirmation deep-link filter was not inserted")
           manifest.write_text(m)
