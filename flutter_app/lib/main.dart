@@ -29,7 +29,7 @@ Future<void> main() async {
     runApp(const MaterialApp(home: Scaffold(body: Center(child: Text('إعداد اتصال السوق غير مكتمل')))));
     return;
   }
-  await Supabase.initialize(url: url, anonKey: anon);
+  await Supabase.initialize(url: url, publishableKey: anon);
   runApp(const MarketApp());
 }
 
