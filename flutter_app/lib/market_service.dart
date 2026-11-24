@@ -275,10 +275,16 @@ class MarketService {
     final u = user;
     if (u == null) throw Exception('سجّل الدخول لحظر المستخدم');
     if (targetUserId == u.id) throw Exception('لا يمكنك حظر حسابك');
-    await db.from('market_blocks').upsert({
+    final existing = await db.from('market_blocks')
+        .select('id')
+        .eq('blocker_id', u.id)
+        .eq('blocked_user_id', targetUserId)
+        .maybeSingle();
+    if (existing != null) return;
+    await db.from('market_blocks').insert({
       'blocker_id': u.id,
       'blocked_user_id': targetUserId,
-    }, onConflict: 'blocker_id,blocked_user_id', ignoreDuplicates: true);
+    });
   }
 
   Future<List<Map<String, dynamic>>> blockedUsers() async {
