@@ -250,6 +250,7 @@ class MarketService {
   Future<void> reportListing({required String listingId, required String ownerId, required String reason, String? details}) async {
     final u = user;
     if (u == null) throw Exception('سجّل الدخول للإبلاغ');
+    if (ownerId == u.id) throw Exception('لا يمكنك الإبلاغ عن إعلانك بهذه الطريقة');
     await db.from('market_reports').insert({
       'reporter_id': u.id,
       'target_user_id': ownerId,
