@@ -21,9 +21,7 @@ const anon = const String.fromEnvironment('SUPABASE_ANON_KEY');
 const green = Color(0xFF178447);
 const authRedirectUrl = 'jandaliarabmarket://login-callback/';
 
-String _cleanError(Object? error) => (error?.toString() ?? '')
-    .replaceFirst(RegExp(r'^(?:Exception|[A-Za-z]+Exception):\s*'), '')
-    .trim();
+String _cleanError(Object? _) => 'حدث خطأ. حاول مرة أخرى.';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -677,8 +675,8 @@ class _AdDetailPageState extends State<AdDetailPage> {
         scrollable: true,
         title: Text(listing ? 'الإبلاغ عن الإعلان' : 'الإبلاغ عن المستخدم'),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(controller: reason, decoration: const InputDecoration(labelText: 'سبب الإبلاغ')),
-          TextField(controller: details, maxLines: 3, decoration: const InputDecoration(labelText: 'تفاصيل إضافية (اختياري)')),
+          TextField(controller: reason, maxLength: 120, decoration: const InputDecoration(labelText: 'سبب الإبلاغ')),
+          TextField(controller: details, maxLength: 2000, maxLines: 3, decoration: const InputDecoration(labelText: 'تفاصيل إضافية (اختياري)')),
         ]),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('إلغاء')),
@@ -712,6 +710,7 @@ class _AdDetailPageState extends State<AdDetailPage> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        scrollable: true,
         title: const Text('حظر المستخدم'),
         content: const Text('لن تتمكن من بدء محادثة معه، وسيتم إخفاء إعلاناته عنك. يمكنك إلغاء الحظر لاحقاً من صفحة حسابك.'),
         actions: [
@@ -1270,11 +1269,21 @@ class _MapPageState extends State<MapPage> {
       MarkerLayer(markers: [Marker(point: point, width: 44, height: 44, child: const Icon(Icons.location_pin, color: Colors.red, size: 42))]),
     ]),
     Positioned(top: 12, left: 12, right: 12, child: Card(child: Padding(padding: const EdgeInsets.all(8), child: Row(children: [Expanded(child: TextField(controller: placeSearch, decoration: const InputDecoration(hintText: 'اكتب مدينة وبلداً، مثل كاسل، ألمانيا', isDense: true), onSubmitted: (_) => searchPlace())), IconButton(onPressed: busy ? null : searchPlace, icon: const Icon(Icons.search)), IconButton(onPressed: busy ? null : locate, icon: const Icon(Icons.my_location))])))),
-    Positioned(bottom: 16, left: 12, right: 12, child: Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(mainAxisSize: MainAxisSize.min, children: [
-      Text(busy ? 'جارٍ تحديد العنوان...' : city + ' ' + district, style: const TextStyle(fontWeight: FontWeight.bold)),
-      Row(children: [const Text('نطاق البحث'), Expanded(child: Slider(value: radius, min: 1, max: 50, divisions: 49, label: '${radius.round()} كم', onChanged: (v) => setState(() => radius = v))), Text('${radius.round()} كم')]),
-      FilledButton(onPressed: busy ? null : () => Navigator.pop(context, {'city': city, 'district': district, 'radius': radius, 'lat': point.latitude, 'lng': point.longitude}), child: const Text('تأكيد موقع البحث')),
-    ])))),
+    Positioned(
+      bottom: 12,
+      left: 12,
+      right: 12,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.38),
+        child: SingleChildScrollView(
+          child: Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(busy ? 'جارٍ تحديد العنوان...' : city + ' ' + district, style: const TextStyle(fontWeight: FontWeight.bold)),
+            Row(children: [const Text('نطاق البحث'), Expanded(child: Slider(value: radius, min: 1, max: 50, divisions: 49, label: '${radius.round()} كم', onChanged: (v) => setState(() => radius = v))), Text('${radius.round()} كم')]),
+            FilledButton(onPressed: busy ? null : () => Navigator.pop(context, {'city': city, 'district': district, 'radius': radius, 'lat': point.latitude, 'lng': point.longitude}), child: const Text('تأكيد موقع البحث')),
+          ]))),
+        ),
+      ),
+    ),
   ]));
 }class ChatPage extends StatefulWidget { final String id; const ChatPage({super.key, required this.id}); @override State<ChatPage> createState() => _ChatPageState(); }
 class _ChatPageState extends State<ChatPage> {
