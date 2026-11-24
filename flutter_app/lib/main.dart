@@ -20,6 +20,10 @@ const url = const String.fromEnvironment('SUPABASE_URL');
 const anon = const String.fromEnvironment('SUPABASE_ANON_KEY');
 const green = Color(0xFF178447);
 
+String _cleanError(Object? error) => (error?.toString() ?? '')
+    .replaceFirst(RegExp(r'^[A-Za-z]+Exception:\\s*'), '')
+    .trim();
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   if (url.isEmpty || anon.isEmpty) {
@@ -94,6 +98,7 @@ class _AuthDialogState extends State<AuthDialog> {
     on AuthException catch (_) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تعذر إرسال رابط إعادة التعيين. تحقق من البريد وحاول مجدداً'))); }
   }
   @override Widget build(BuildContext context) => AlertDialog(
+    scrollable: true,
     title: Text(signup ? 'إنشاء حساب' : 'تسجيل الدخول'),
     content: Column(mainAxisSize: MainAxisSize.min, children: [
       if (signup) TextField(controller: displayName, decoration: const InputDecoration(labelText: 'اسمك')),
@@ -119,6 +124,8 @@ class _MarketHomeState extends State<MarketHome> {
   List<MarketListing> ads = [];
   Set<String> fav = {};
   bool busy = true;
+  bool hasMoreAds = true, loadingMoreAds = false;
+  static const int _pageSize = 200;
   String search = '', city = '', selectedLocation = 'كاسل، ألمانيا';
   String? category;
   final searchBox = TextEditingController();
@@ -159,10 +166,34 @@ class _MarketHomeState extends State<MarketHome> {
   }
   Future<void> load() async {
     setState(() => busy = true);
-    try { final rows = await api.loadListings(); if (mounted) setState(() => ads = rows); }
-    catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تعذر تحميل الإعلانات: ' + e.toString()))); }
+    try {
+      final rows = await api.loadListings(offset: 0, limit: _pageSize);
+      if (mounted) setState(() { ads = rows; hasMoreAds = rows.length == _pageSize; });
+    }
+    catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تعذر تحميل الإعلانات: ' + _cleanError(e)))); }
     finally { if (mounted) setState(() => busy = false); }
   }
+
+  Future<void> loadMoreAds() async {
+    if (busy || loadingMoreAds || !hasMoreAds) return;
+    setState(() => loadingMoreAds = true);
+    try {
+      final rows = await api.loadListings(offset: ads.length, limit: _pageSize);
+      if (mounted) setState(() { ads.addAll(rows); hasMoreAds = rows.length == _pageSize; });
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تعذر تحميل المزيد: ' + _cleanError(e))));
+    } finally {
+      if (mounted) setState(() => loadingMoreAds = false);
+    }
+  }
+
+  Widget _loadMoreButton() => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 12),
+    child: OutlinedButton(
+      onPressed: loadingMoreAds || !hasMoreAds ? null : loadMoreAds,
+      child: Text(loadingMoreAds ? 'جارٍ تحميل المزيد...' : 'تحميل المزيد من الإعلانات'),
+    ),
+  );
   double _distanceKm(double lat1, double lng1, double lat2, double lng2) {
     const earthRadiusKm = 6371.0;
     final dLat = (lat2 - lat1) * math.pi / 180;
@@ -451,7 +482,8 @@ class _MarketHomeState extends State<MarketHome> {
         const SizedBox(height: 17),
         const Text('أحدث الإعلانات', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17)),
         const SizedBox(height: 7),
-        feed(locationFilteredAds.take(15).toList()),
+        feed(locationFilteredAds),
+        if (hasMoreAds || loadingMoreAds) _loadMoreButton(),
         ],
       ],
     ),
@@ -492,7 +524,10 @@ class _MarketHomeState extends State<MarketHome> {
           ],
         ),
       ),
-      Expanded(child: feed(results)),
+      Expanded(child: Column(children: [
+        Expanded(child: feed(results)),
+        if (hasMoreAds || loadingMoreAds) _loadMoreButton(),
+      ])),
     ],
   );
 
@@ -520,7 +555,7 @@ class _MarketHomeState extends State<MarketHome> {
       ? Center(child: FilledButton(onPressed: () async { if (await requireLogin() && mounted) setState(() => tab = 3); }, child: const Text('تسجيل الدخول لعرض الرسائل')))
       : FutureBuilder<List<Map<String, dynamic>>>(future: api.conversations(), builder: (c, s) {
     if (s.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-    if (s.hasError) return Center(child: Text(s.error.toString()));
+    if (s.hasError) return Center(child: Text(_cleanError(s.error)));
     final rows = s.data ?? [];
     if (rows.isEmpty) return const Center(child: Text('لا توجد محادثات بعد'));
     return ListView(children: rows.map((r) {
@@ -583,7 +618,7 @@ class _AdDetailPageState extends State<AdDetailPage> {
           }
           setState(() => waiting = true);
           try { final id = await MarketService.instance.openConversation(x); if (mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => ChatPage(id: id))); }
-          catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()))); }
+          catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_cleanError(e)))); }
           finally { if (mounted) setState(() => waiting = false); }
         }, icon: const Icon(Icons.message), label: const Text('راسل البائع')),
       ]),
@@ -646,17 +681,17 @@ class _AddAdPageState extends State<AddAdPage> {
   void msg(String s) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s)));
 
   static const Map<String, List<String>> _categoryFields = {
-    'houses':['نوع العقار','نوع العرض (بيع/إيجار)','المساحة','عدد الغرف','الطابق'],
-    'cars':['الماركة','الموديل','سنة الصنع','عدد الكيلومترات','نوع الوقود'],
-    'free':['نوع الغرض','حالة الغرض','طريقة الاستلام'],
-    'jobs':['المسمى الوظيفي','نوع العمل','الراتب','الخبرة المطلوبة'],
-    'clothes':['نوع الملابس','المقاس','الفئة (رجالي/نسائي/أطفال)','الحالة'],
-    'phones':['الماركة','الموديل','سعة التخزين','حالة الجهاز'],
-    'animals':['نوع الحيوان','العمر','العدد','السلالة'],
-    'services':['نوع الخدمة','المهنة','سنوات الخبرة','نطاق الخدمة'],
-    'furniture':['نوع الأثاث','الخامة','الحالة','الأبعاد'],
-    'bikes':['الماركة','الموديل','سنة الصنع','الحالة'],
-    'kitchen':['نوع الأداة','المادة','الحالة','العدد'],
+    'houses':['نوع العقار','نوع العرض (بيع/إيجار)','المساحة','عدد الغرف','عدد الحمامات','الطابق','عدد الطوابق','حالة العقار','الملكية/الطابو','التدفئة','الكهرباء والماء'],
+    'cars':['الماركة','الموديل','سنة الصنع','عدد الكيلومترات','نوع الوقود','ناقل الحركة','سعة المحرك','حالة السيارة','نوع الهيكل','بلد المنشأ'],
+    'free':['نوع الغرض','الماركة أو الوصف','حالة الغرض','العدد','طريقة الاستلام','المدينة أو المنطقة'],
+    'jobs':['المسمى الوظيفي','مجال العمل','نوع الدوام','الراتب','ساعات العمل','الخبرة المطلوبة','المؤهل العلمي','مكان العمل'],
+    'clothes':['نوع الملابس','المقاس','الفئة (رجالي/نسائي/أطفال)','الحالة','اللون','الماركة','العدد'],
+    'phones':['الماركة','الموديل','سعة التخزين','الذاكرة العشوائية RAM','حالة الجهاز','صحة البطارية','اللون','الملحقات'],
+    'animals':['نوع الحيوان','العمر','العدد','السلالة','الجنس','الحالة الصحية','مكان التسليم'],
+    'services':['نوع الخدمة','المهنة','سنوات الخبرة','نطاق الخدمة','أيام العمل','هل يوجد انتقال للزبون','السعر أو طريقة الحساب'],
+    'furniture':['نوع الأثاث','الخامة','الحالة','الأبعاد','اللون','العدد','مكان الاستلام'],
+    'bikes':['الماركة','الموديل','سنة الصنع','سعة المحرك','عدد الكيلومترات','الحالة','نوع الوقود'],
+    'kitchen':['نوع الأداة','المادة','الحالة','العدد','الماركة','المقاس أو السعة'],
   };
   List<String> get _fieldsForCategory => _categoryFields[category] ?? const [];
   TextEditingController _detailController(String field) => detailControllers.putIfAbsent('$category::$field', () => TextEditingController());
@@ -772,7 +807,7 @@ class _AddAdPageState extends State<AddAdPage> {
       if (uploadedPaths.isNotEmpty) {
         try { await storage.remove(uploadedPaths); } catch (_) {}
       }
-      if (mounted) msg('فشل اختبار رفع الصور: ' + e.toString());
+      if (mounted) msg('فشل اختبار رفع الصور: ' + _cleanError(e));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -832,7 +867,7 @@ class _AddAdPageState extends State<AddAdPage> {
         ),
       );
     } catch (e) {
-      if (mounted) msg('تعذر نشر الإعلان: ${e.toString()}');
+      if (mounted) msg('تعذر نشر الإعلان: ${_cleanError(e)}');
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -1021,7 +1056,9 @@ class _AddAdPageState extends State<AddAdPage> {
             Expanded(child: TextField(controller: price, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'السعر'))),
             DropdownButton<String>(value: currency, items: const [DropdownMenuItem(value: 'SYP', child: Text('ل.س')), DropdownMenuItem(value: 'USD', child: Text('USD'))], onChanged: (v) => setState(() => currency = v ?? 'SYP')),
           ],
-        ),
+        )
+      else
+        const ListTile(leading: Icon(Icons.card_giftcard, color: green), title: Text('السعر: مجاناً', style: TextStyle(fontWeight: FontWeight.w900))),
       const SizedBox(height: 13),
       OutlinedButton(
         onPressed: busy ? null : testPhotoUpload,
@@ -1120,7 +1157,7 @@ class _ChatPageState extends State<ChatPage> {
   @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('محادثة خاصة')), body: Column(children: [
     Expanded(child: FutureBuilder<List<Map<String, dynamic>>>(future: messageFuture, builder: (c, s) {
       if (s.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-      if (s.hasError) return Center(child: Text(s.error.toString()));
+      if (s.hasError) return Center(child: Text(_cleanError(s.error)));
       return ListView(padding: const EdgeInsets.all(12), children: (s.data ?? []).map((m) { final mine = m['sender_id'] == MarketService.instance.user?.id; return Align(alignment: mine ? Alignment.centerRight : Alignment.centerLeft, child: Container(margin: const EdgeInsets.all(4), padding: const EdgeInsets.all(12), constraints: const BoxConstraints(maxWidth: 300), decoration: BoxDecoration(color: mine ? const Color(0xFFDDF3E3) : Colors.white, borderRadius: BorderRadius.circular(12)), child: Text(m['body'].toString()))); }).toList());
     })),
     SafeArea(child: Row(children: [Expanded(child: TextField(controller: input, decoration: const InputDecoration(hintText: 'اكتب رسالتك'))), IconButton(onPressed: sending ? null : send, icon: const Icon(Icons.send, color: green))])),
@@ -1133,7 +1170,7 @@ class _MyAdsPageState extends State<MyAdsPage> {
   @override void initState() { super.initState(); future = MarketService.instance.myListings(); }
   @override Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('إعلاناتي')), body: FutureBuilder<List<MarketListing>>(future: future, builder: (c, s) {
     if (s.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-    if (s.hasError) return Center(child: Text(s.error.toString()));
+    if (s.hasError) return Center(child: Text(_cleanError(s.error)));
     final rows = s.data ?? [];
     return ListView(children: rows.map((x) => ListTile(
       title: Text(x.title), subtitle: Text(x.location + ' • ' + x.status),
