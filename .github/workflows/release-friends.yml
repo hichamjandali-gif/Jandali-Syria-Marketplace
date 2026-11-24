@@ -8,11 +8,6 @@ on:
         required: true
         default: "v1.0-friends"
         type: string
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/release-friends.yml"
 
 permissions:
   contents: write
@@ -40,8 +35,7 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Validate app configuration and select friends signing
-        id: signing
+      - name: Require permanent Android signing key
         env:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -49,25 +43,18 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          if [ -z "$SUPABASE_ANON_KEY" ]; then
-            echo "::error::Missing required GitHub Actions secret: SUPABASE_ANON_KEY"
-            exit 1
-          fi
+          for name in SUPABASE_ANON_KEY ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing required GitHub Actions secret: $name. Refusing to build with a different/debug signing key."
+              exit 1
+            fi
+          done
           case "$SUPABASE_ANON_KEY" in
             sb_secret_*|*service_role*) echo "::error::A secret/service_role key must never be embedded in a mobile app."; exit 1 ;;
           esac
-          if [ -n "$ANDROID_KEYSTORE_BASE64" ] && [ -n "$ANDROID_KEYSTORE_PASSWORD" ] && [ -n "$ANDROID_KEY_ALIAS" ] && [ -n "$ANDROID_KEY_PASSWORD" ]; then
-            echo "mode=permanent" >> "$GITHUB_OUTPUT"
-            echo "All Android signing secrets are present; using the configured keystore."
-          else
-            echo "mode=friends-debug" >> "$GITHUB_OUTPUT"
-            echo "::notice::Android signing secrets are not all present. Building friends-only APK with Android's temporary debug signing key. This APK is not suitable for seamless updates to a later permanently signed release."
-          fi
-
       - name: Generate Android project, app identity, icon and signing config
         working-directory: flutter_app
         env:
-          SIGNING_MODE: ${{ steps.signing.outputs.mode }}
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -90,29 +77,6 @@ jobs:
           text = re.sub(r'applicationId = "[^"]+"', 'applicationId = "com.jandali.arabmarket"', text, count=1)
           if 'applicationId = "com.jandali.arabmarket"' not in text:
               raise SystemExit("Could not set official applicationId")
-          if os.environ.get("SIGNING_MODE") == "permanent":
-              signing = """
-                  signingConfigs {
-                      create("release") {
-                          storeFile = file(System.getenv("ANDROID_KEYSTORE_PATH")!!)
-                          storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
-                          keyAlias = System.getenv("ANDROID_KEY_ALIAS")
-                          keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
-                      }
-                  }
-              """
-              if "signingConfigs {" not in text:
-                  text = text.replace("    buildTypes {", signing + "\n    buildTypes {", 1)
-              text = text.replace('signingConfig = signingConfigs.getByName("debug")', 'signingConfig = signingConfigs.getByName("release")')
-              release_start = text.find('release {')
-              if release_start < 0:
-                  raise SystemExit("Release build type not found")
-              text = text[:release_start] + text[release_start:].replace('isMinifyEnabled = false', 'signingConfig = signingConfigs.getByName("release")\n            isMinifyEnabled = false', 1)
-          else:
-              release_start = text.find('release {')
-              if release_start < 0:
-                  raise SystemExit("Release build type not found")
-              text = text[:release_start] + text[release_start:].replace('signingConfig = signingConfigs.getByName("release")', 'signingConfig = signingConfigs.getByName("debug")', 1)
           gradle.write_text(text)
           manifest = Path("android/app/src/main/AndroidManifest.xml")
           m = manifest.read_text()
@@ -144,12 +108,8 @@ jobs:
               <path android:fillColor="#F7FFF8" android:pathData="M62,83h33l-5,13h-23z"/>
           </vector>""")
           PY
-          if [ "$SIGNING_MODE" = "permanent" ]; then
-            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > release.keystore
-            echo "ANDROID_KEYSTORE_PATH=$PWD/release.keystore" >> "$GITHUB_ENV"
-          else
-            echo "Friends-only APK will use the generated Android debug signing key."
-          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > release.keystore
+          echo "ANDROID_KEYSTORE_PATH=$PWD/release.keystore" >> "$GITHUB_ENV"
 
       - name: Install dependencies and analyze
         working-directory: flutter_app
