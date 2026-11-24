@@ -680,7 +680,7 @@ class _AdDetailPageState extends State<AdDetailPage> {
         ]),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('إلغاء')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, reason.text.trim().length >= 2), child: const Text('إرسال البلاغ')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('إرسال البلاغ')),
         ],
       ),
     );
