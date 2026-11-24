@@ -568,7 +568,10 @@ class _MarketHomeState extends State<MarketHome> {
         title: Row(children: [Expanded(child: Text(x.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900))), IconButton(visualDensity: VisualDensity.compact, onPressed: () => speak(x.title + '. ' + x.description), icon: const Icon(Icons.volume_up, size: 18), tooltip: 'استمع')]),
         subtitle: Text(x.priceLabel + '\n' + x.location + (x.lat == null || x.lng == null ? '\nبدون موقع دقيق' : ''), style: const TextStyle(color: green, fontWeight: FontWeight.bold)),
         trailing: IconButton(onPressed: () => toggle(x.id), icon: Icon(fav.contains(x.id) ? Icons.favorite : Icons.favorite_border, color: fav.contains(x.id) ? Colors.red : null)),
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AdDetailPage(ad: x, favorite: fav.contains(x.id), onFavorite: () => toggle(x.id)))),
+        onTap: () async {
+           final blocked = await Navigator.push<bool>(context, MaterialPageRoute(builder: (_) => AdDetailPage(ad: x, favorite: fav.contains(x.id), onFavorite: () => toggle(x.id))));
+           if (blocked == true && mounted) await load();
+         },
       ));
     });
   }
@@ -724,7 +727,7 @@ class _AdDetailPageState extends State<AdDetailPage> {
       await MarketService.instance.blockUser(widget.ad.ownerId);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم حظر المستخدم')));
-        Navigator.pop(context);
+        Navigator.pop(context, true);
       }
     } catch (_) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تعذر حظر المستخدم. سجّل الدخول وحاول مرة أخرى')));
