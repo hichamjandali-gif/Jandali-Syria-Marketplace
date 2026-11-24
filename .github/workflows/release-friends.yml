@@ -102,6 +102,18 @@ jobs:
           m = manifest.read_text()
           m = re.sub(r'android:label="[^"]+"', 'android:label="السوق العربي"', m, count=1)
           m = re.sub(r'<application', '<application android:icon="@drawable/market_launcher"', m, count=1)
+          deep_link = """
+                  <intent-filter>
+                      <action android:name="android.intent.action.VIEW" />
+                      <category android:name="android.intent.category.DEFAULT" />
+                      <category android:name="android.intent.category.BROWSABLE" />
+                      <data android:scheme="jandaliarabmarket" android:host="login-callback" />
+                  </intent-filter>
+          """
+          if 'android:scheme="jandaliarabmarket"' not in m:
+              m = m.replace('</activity>', deep_link + '\\n            </activity>', 1)
+          if 'android:scheme="jandaliarabmarket"' not in m:
+              raise SystemExit("Email confirmation deep-link filter was not inserted")
           manifest.write_text(m)
           icon = Path("android/app/src/main/res/drawable/market_launcher.xml")
           icon.write_text("""<vector xmlns:android="http://schemas.android.com/apk/res/android"
