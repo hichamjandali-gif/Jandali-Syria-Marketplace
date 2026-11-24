@@ -22,6 +22,30 @@ jobs:
         with:
           channel: stable
           cache: true
+      - name: Verify generated Android auth deep link (no APK)
+        working-directory: flutter_app
+        run: |
+          flutter create --platforms=android --project-name jandali_market_native _android_scaffold
+          python3 - <<'PY'
+          from pathlib import Path
+          manifest = Path("_android_scaffold/android/app/src/main/AndroidManifest.xml")
+          content = manifest.read_text()
+          intent = """            <intent-filter>
+                          <action android:name="android.intent.action.VIEW" />
+                          <category android:name="android.intent.category.DEFAULT" />
+                          <category android:name="android.intent.category.BROWSABLE" />
+                          <data android:scheme="jandaliarabmarket" android:host="login-callback" />
+                      </intent-filter>
+          """
+          if "jandaliarabmarket" not in content:
+              if "</activity>" not in content:
+                  raise SystemExit("MainActivity closing tag not found")
+              content = content.replace("</activity>", intent + "            </activity>", 1)
+              manifest.write_text(content)
+          if "jandaliarabmarket" not in manifest.read_text():
+              raise SystemExit("Auth deep link was not added")
+          PY
+          rm -rf _android_scaffold
       - name: Install dependencies
         working-directory: flutter_app
         run: flutter pub get
