@@ -153,7 +153,7 @@ class _MarketHomeState extends State<MarketHome> {
       if (!available) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('البحث الصوتي غير متاح على هذا الجهاز'))); return; }
       setState(() => listening = true);
       await speech.listen(localeId: 'ar_SA', onResult: (result) { if (!mounted) return; searchBox.text = result.recognizedWords; setState(() => search = result.recognizedWords); });
-    } catch (e) { if (mounted) { setState(() => listening = false); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تعذر تشغيل البحث الصوتي: $e'))); } }
+    } catch (e) { if (mounted) { setState(() => listening = false); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text('تعذر تشغيل البحث الصوتي. تحقق من أذونات الميكروفون وحاول مرة أخرى'))); } }
   }
 
   Future<void> loadFav() async {
@@ -610,7 +610,7 @@ class _AdDetailPageState extends State<AdDetailPage> {
         Text(x.priceLabel, style: const TextStyle(color: green, fontSize: 20, fontWeight: FontWeight.bold)),
         ListTile(leading: const Icon(Icons.location_on), title: Text(x.location)),
         Text(x.description, style: const TextStyle(fontSize: 16)),
-        OutlinedButton.icon(onPressed: () async { try { await tts.setLanguage('ar-SA'); await tts.speak('${x.title}. ${x.description}'); } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تعذر تشغيل الاستماع: $e'))); } }, icon: const Icon(Icons.volume_up), label: const Text('استماع لوصف الإعلان')),
+        OutlinedButton.icon(onPressed: () async { try { await tts.setLanguage('ar-SA'); await tts.speak('${x.title}. ${x.description}'); } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: const Text('تعذر تشغيل الاستماع على هذا الجهاز'))); } }, icon: const Icon(Icons.volume_up), label: const Text('استماع لوصف الإعلان')),
         FilledButton.icon(onPressed: waiting ? null : () async {
           if (MarketService.instance.user == null) {
             final ok = await showDialog<bool>(context: context, barrierDismissible: false, builder: (_) => const AuthDialog());
