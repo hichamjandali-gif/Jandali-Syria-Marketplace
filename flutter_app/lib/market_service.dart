@@ -206,6 +206,118 @@ class MarketService {
     return city.isEmpty?title:'$title • $city';
   }
 
+
+  Future<String> conversationPeerName(Map<String, dynamic> conversation) async {
+    final currentId = user?.id;
+    if (currentId == null) return 'مستخدم';
+    final peerId = conversation['buyer_id'] == currentId
+        ? conversation['seller_id']?.toString()
+        : conversation['buyer_id']?.toString();
+    if (peerId == null || peerId.isEmpty) return 'مستخدم';
+    final row = await db.from('market_profiles')
+        .select('display_name').eq('user_id', peerId).maybeSingle();
+    final name = (row?['display_name'] ?? '').toString().trim();
+    return name.isEmpty ? 'مستخدم' : name;
+  }
+
+  Future<Map<String, String>> conversationParticipantNames(String conversationId) async {
+    final currentId = user?.id;
+    if (currentId == null) return {};
+    final conversation = await db.from('market_conversations')
+        .select('buyer_id,seller_id').eq('id', conversationId).single();
+    final ids = <String>{
+      conversation['buyer_id'].toString(),
+      conversation['seller_id'].toString(),
+    };
+    final rows = await db.from('market_profiles')
+        .select('user_id,display_name').inFilter('user_id', ids.toList());
+    final names = <String, String>{};
+    for (final row in rows) {
+      final id = row['user_id'].toString();
+      final name = (row['display_name'] ?? '').toString().trim();
+      if (name.isNotEmpty) names[id] = name;
+    }
+    for (final id in ids) {
+      if (!names.containsKey(id)) {
+        names[id] = id == currentId
+            ? ((user?.userMetadata?['full_name'] ?? user?.email?.split('@').first ?? 'أنا').toString())
+            : 'مستخدم';
+      }
+    }
+    return names;
+  }
+
+  Future<void> reportListing({required String listingId, required String ownerId, required String reason, String? details}) async {
+    final u = user;
+    if (u == null) throw Exception('سجّل الدخول للإبلاغ');
+    await db.from('market_reports').insert({
+      'reporter_id': u.id,
+      'target_user_id': ownerId,
+      'listing_id': listingId,
+      'reason': reason,
+      'details': details?.trim().isEmpty == true ? null : details?.trim(),
+    });
+  }
+
+  Future<void> reportUser({required String targetUserId, required String reason, String? details}) async {
+    final u = user;
+    if (u == null) throw Exception('سجّل الدخول للإبلاغ');
+    if (targetUserId == u.id) throw Exception('لا يمكنك الإبلاغ عن حسابك');
+    await db.from('market_reports').insert({
+      'reporter_id': u.id,
+      'target_user_id': targetUserId,
+      'reason': reason,
+      'details': details?.trim().isEmpty == true ? null : details?.trim(),
+    });
+  }
+
+  Future<void> blockUser(String targetUserId) async {
+    final u = user;
+    if (u == null) throw Exception('سجّل الدخول لحظر المستخدم');
+    if (targetUserId == u.id) throw Exception('لا يمكنك حظر حسابك');
+    await db.from('market_blocks').upsert({
+      'blocker_id': u.id,
+      'blocked_user_id': targetUserId,
+    }, onConflict: 'blocker_id,blocked_user_id', ignoreDuplicates: true);
+  }
+
+  Future<List<Map<String, dynamic>>> blockedUsers() async {
+    final u = user;
+    if (u == null) throw Exception('سجّل الدخول');
+    final blocks = await db.from('market_blocks')
+        .select('blocked_user_id,created_at')
+        .eq('blocker_id', u.id)
+        .order('created_at', ascending: false);
+    if (blocks.isEmpty) return [];
+    final ids = blocks.map((r) => r['blocked_user_id'].toString()).toList();
+    final profiles = await db.from('market_profiles')
+        .select('user_id,display_name').inFilter('user_id', ids);
+    final names = <String, String>{
+      for (final row in profiles) row['user_id'].toString(): row['display_name'].toString(),
+    };
+    return blocks.map((r) => {
+      'user_id': r['blocked_user_id'].toString(),
+      'display_name': names[r['blocked_user_id'].toString()] ?? 'مستخدم',
+      'created_at': r['created_at'],
+    }).toList();
+  }
+
+  Future<void> unblockUser(String targetUserId) async {
+    final u = user;
+    if (u == null) throw Exception('سجّل الدخول');
+    await db.from('market_blocks').delete()
+        .eq('blocker_id', u.id).eq('blocked_user_id', targetUserId);
+  }
+
+  Future<void> deleteAccount() async {
+    if (user == null) throw Exception('سجّل الدخول أولاً');
+    final response = await db.functions.invoke('delete-account');
+    if (response.status < 200 || response.status >= 300) {
+      throw Exception('تعذر حذف الحساب حالياً');
+    }
+    await db.auth.signOut();
+  }
+
   Future<List<Map<String,dynamic>>> conversations() async {
     final u=user;if(u==null)throw Exception('سجّل الدخول');
     final r=await db.from('market_conversations').select().or('buyer_id.eq.${u.id},seller_id.eq.${u.id}').order('created_at',ascending:false);
