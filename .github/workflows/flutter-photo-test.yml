@@ -25,6 +25,23 @@ jobs:
           cp _android_scaffold/.metadata .metadata
           rm -rf _android_scaffold
           sed -i '/<manifest/a\    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.RECORD_AUDIO" />' android/app/src/main/AndroidManifest.xml
+          python3 - <<'PY'
+          from pathlib import Path
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          content = manifest.read_text()
+          intent = """            <intent-filter>
+                          <action android:name="android.intent.action.VIEW" />
+                          <category android:name="android.intent.category.DEFAULT" />
+                          <category android:name="android.intent.category.BROWSABLE" />
+                          <data android:scheme="jandaliarabmarket" android:host="login-callback" />
+                      </intent-filter>
+          """
+          if "jandaliarabmarket" not in content:
+              if "</activity>" not in content:
+                  raise SystemExit("MainActivity closing tag not found; refusing to build without auth deep link")
+              content = content.replace("</activity>", intent + "            </activity>", 1)
+              manifest.write_text(content)
+          PY
       - name: Install dependencies
         working-directory: flutter_app
         run: flutter pub get
