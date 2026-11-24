@@ -1,11 +1,6 @@
 name: Build native Flutter Arab Market APK
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'flutter_app/**'
-      - '.github/workflows/flutter-photo-test.yml'
   workflow_dispatch:
 
 permissions:
