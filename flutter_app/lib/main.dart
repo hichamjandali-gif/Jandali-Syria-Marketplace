@@ -19,6 +19,7 @@ import 'market_service.dart';
 const url = const String.fromEnvironment('SUPABASE_URL');
 const anon = const String.fromEnvironment('SUPABASE_ANON_KEY');
 const green = Color(0xFF178447);
+const authRedirectUrl = 'jandaliarabmarket://login-callback/';
 
 String _cleanError(Object? error) => (error?.toString() ?? '')
     .replaceFirst(RegExp(r'^(?:Exception|[A-Za-z]+Exception):\s*'), '')
@@ -53,7 +54,7 @@ class _AuthDialogState extends State<AuthDialog> {
   final email = TextEditingController();
   final password = TextEditingController();
   final displayName = TextEditingController();
-  bool signup = false, waiting = false, showPassword = false;
+  bool signup = false, waiting = false, showPassword = false, acceptedTerms = false;
   @override void dispose() {
     email.dispose();
     password.dispose();
@@ -66,8 +67,20 @@ class _AuthDialogState extends State<AuthDialog> {
     try {
       final auth = Supabase.instance.client.auth;
       debugPrint('محاولة دخول من APK - البريد: ${email.text.trim()} - العملية: ${signup ? 'إنشاء حساب' : 'تسجيل دخول'}');
+      if (signup && displayName.text.trim().length < 2) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('اكتب اسماً من حرفين على الأقل')));
+        return;
+      }
       final response = signup
-          ? await auth.signUp(email: email.text.trim(), password: password.text, data: {'full_name': displayName.text.trim()})
+          ? await auth.signUp(
+              email: email.text.trim(),
+              password: password.text,
+              emailRedirectTo: authRedirectUrl,
+              data: {
+                'full_name': displayName.text.trim(),
+                'terms_accepted_at': DateTime.now().toUtc().toIso8601String(),
+              },
+            )
           : await auth.signInWithPassword(email: email.text.trim(), password: password.text);
       debugPrint('وصل رد من Supabase - النتيجة: user=${response.user != null}, session=${response.session != null}');
       if (!mounted) return;
@@ -94,7 +107,7 @@ class _AuthDialogState extends State<AuthDialog> {
   }
   Future<void> resetPassword() async {
     if (email.text.trim().isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('أدخل بريدك الإلكتروني أولاً'))); return; }
-    try { await Supabase.instance.client.auth.resetPasswordForEmail(email.text.trim()); if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك'))); }
+    try { await Supabase.instance.client.auth.resetPasswordForEmail(email.text.trim(), redirectTo: authRedirectUrl); if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك'))); }
     on AuthException catch (_) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تعذر إرسال رابط إعادة التعيين. تحقق من البريد وحاول مجدداً'))); }
   }
   @override Widget build(BuildContext context) => AlertDialog(
@@ -102,6 +115,17 @@ class _AuthDialogState extends State<AuthDialog> {
     title: Text(signup ? 'إنشاء حساب' : 'تسجيل الدخول'),
     content: Column(mainAxisSize: MainAxisSize.min, children: [
       if (signup) TextField(controller: displayName, decoration: const InputDecoration(labelText: 'اسمك')),
+      if (signup) CheckboxListTile(
+        value: acceptedTerms,
+        contentPadding: EdgeInsets.zero,
+        controlAffinity: ListTileControlAffinity.leading,
+        onChanged: waiting ? null : (value) => setState(() => acceptedTerms = value ?? false),
+        title: const Text('أوافق على سياسة الخصوصية وشروط الاستخدام', style: TextStyle(fontSize: 12)),
+      ),
+      if (signup) TextButton(
+        onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PrivacyTermsPage())),
+        child: const Text('قراءة سياسة الخصوصية والشروط'),
+      ),
       TextField(controller: email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'البريد الإلكتروني')),
       TextField(controller: password, obscureText: !showPassword, decoration: InputDecoration(labelText: 'كلمة المرور', suffixIcon: IconButton(icon: Icon(showPassword ? Icons.visibility_off : Icons.visibility), onPressed: () => setState(() => showPassword = !showPassword)))),
       if (!signup) Align(alignment: Alignment.centerRight, child: TextButton(onPressed: waiting ? null : resetPassword, child: const Text('نسيت كلمة المرور؟'))),
@@ -109,7 +133,7 @@ class _AuthDialogState extends State<AuthDialog> {
     ]),
     actions: [
       TextButton(onPressed: waiting ? null : () => Navigator.of(context).pop(false), child: const Text('إلغاء')),
-      FilledButton(onPressed: waiting ? null : submit, child: Text(waiting ? 'انتظر...' : 'متابعة')),
+      FilledButton(onPressed: waiting || (signup && !acceptedTerms) ? null : submit, child: Text(waiting ? 'انتظر...' : 'متابعة')),
     ],
   );
 }
@@ -563,11 +587,52 @@ class _MarketHomeState extends State<MarketHome> {
       return ListTile(
         leading: const Icon(Icons.chat),
         title: FutureBuilder<String>(future: api.conversationTitle(r), builder: (context, title) => Text(title.data ?? 'جارٍ تحميل الإعلان...', maxLines: 1, overflow: TextOverflow.ellipsis)),
-        subtitle: Text((buyer ? 'أنت المشتري' : 'أنت البائع') + ' • ' + r['created_at'].toString()),
+        subtitle: FutureBuilder<String>(
+          future: api.conversationPeerName(r),
+          builder: (context, peer) => Text(
+            (buyer ? 'أنت المشتري' : 'أنت البائع') + ' • ' + (peer.data ?? 'جارٍ تحميل الاسم...'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
         onTap: () { Navigator.push(context, MaterialPageRoute(builder: (_) => ChatPage(id: r['id'] as String))); },
       );
     }).toList());
   });
+
+  Future<void> _deleteMyAccount() async {
+    final controller = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        scrollable: true,
+        title: const Text('حذف الحساب نهائياً'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('سيتم حذف حسابك وإعلاناتك وصورك ورسائلك وبيانات الملف الشخصي. لا يمكن التراجع عن هذه العملية. اكتب كلمة حذف للتأكيد.'),
+          TextField(controller: controller, decoration: const InputDecoration(labelText: 'اكتب: حذف')),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('إلغاء')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(dialogContext, controller.text.trim() == 'حذف'),
+            child: const Text('تأكيد الحذف'),
+          ),
+        ],
+      ),
+    );
+    final typed = controller.text.trim();
+    controller.dispose();
+    if (confirmed != true || typed != 'حذف') return;
+    try {
+      await api.deleteAccount();
+      if (!mounted) return;
+      setState(() { tab = 0; });
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم إرسال طلب حذف الحساب وإكماله')));
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تعذر حذف الحساب الآن. لم نؤكد اكتمال الحذف؛ حاول لاحقاً أو تواصل مع الدعم.')));
+    }
+  }
 
   Widget accountPage() {
     final user = api.user;
@@ -584,6 +649,9 @@ class _MarketHomeState extends State<MarketHome> {
         Center(child: Text(displayName.isEmpty ? 'حسابي' : displayName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
         Center(child: Text(user.email ?? '', style: const TextStyle(color: Colors.black54))),
         ListTile(leading: const Icon(Icons.inventory), title: const Text('إعلاناتي'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyAdsPage()))),
+        ListTile(leading: const Icon(Icons.block), title: const Text('المستخدمون المحظورون'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BlockedUsersPage()))),
+        ListTile(leading: const Icon(Icons.privacy_tip_outlined), title: const Text('سياسة الخصوصية وشروط الاستخدام'), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PrivacyTermsPage()))),
+        ListTile(leading: const Icon(Icons.delete_forever, color: Colors.red), title: const Text('حذف حسابي نهائياً', style: TextStyle(color: Colors.red)), onTap: _deleteMyAccount),
         ListTile(leading: const Icon(Icons.logout), title: const Text('تسجيل الخروج'), onTap: () async { await Supabase.instance.client.auth.signOut(); if (mounted) setState(() => tab = 0); }),
       ],
       const Divider(), const ListTile(title: Text('السوق العربي - By Hicham Jandali'), subtitle: Text('نسخة Flutter')),
@@ -600,9 +668,88 @@ class _AdDetailPageState extends State<AdDetailPage> {
   int active = 0; bool waiting = false;
   final tts = FlutterTts();
   @override void dispose() { tts.stop(); super.dispose(); }
+  Future<void> _submitReport({required bool listing}) async {
+    final reason = TextEditingController();
+    final details = TextEditingController();
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        scrollable: true,
+        title: Text(listing ? 'الإبلاغ عن الإعلان' : 'الإبلاغ عن المستخدم'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: reason, decoration: const InputDecoration(labelText: 'سبب الإبلاغ')),
+          TextField(controller: details, maxLines: 3, decoration: const InputDecoration(labelText: 'تفاصيل إضافية (اختياري)')),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('إلغاء')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, reason.text.trim().length >= 2), child: const Text('إرسال البلاغ')),
+        ],
+      ),
+    );
+    final reasonText = reason.text.trim();
+    final detailsText = details.text.trim();
+    reason.dispose(); details.dispose();
+    if (accepted != true || reasonText.length < 2) {
+      if (accepted == true && mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('اكتب سبب الإبلاغ')));
+      return;
+    }
+    try {
+      if (listing) {
+        await MarketService.instance.reportListing(listingId: widget.ad.id, ownerId: widget.ad.ownerId, reason: reasonText, details: detailsText);
+      } else {
+        await MarketService.instance.reportUser(targetUserId: widget.ad.ownerId, reason: reasonText, details: detailsText);
+      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم إرسال البلاغ للمراجعة')));
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تعذر إرسال البلاغ. سجّل الدخول وحاول مرة أخرى')));
+    }
+  }
+
+  Future<void> _reportListing() => _submitReport(listing: true);
+  Future<void> _reportUser() => _submitReport(listing: false);
+
+  Future<void> _blockSeller() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('حظر المستخدم'),
+        content: const Text('لن تتمكن من بدء محادثة معه، وسيتم إخفاء إعلاناته عنك. يمكنك إلغاء الحظر لاحقاً من صفحة حسابك.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('إلغاء')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('حظر')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await MarketService.instance.blockUser(widget.ad.ownerId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم حظر المستخدم')));
+        Navigator.pop(context);
+      }
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تعذر حظر المستخدم. سجّل الدخول وحاول مرة أخرى')));
+    }
+  }
+
   @override Widget build(BuildContext context) {
     final x = widget.ad;
-    return Scaffold(appBar: AppBar(title: const Text('تفاصيل الإعلان'), actions: [IconButton(onPressed: widget.onFavorite, icon: Icon(widget.favorite ? Icons.favorite : Icons.favorite_border))]),
+    return Scaffold(appBar: AppBar(title: const Text('تفاصيل الإعلان'), actions: [
+        IconButton(onPressed: widget.onFavorite, icon: Icon(widget.favorite ? Icons.favorite : Icons.favorite_border)),
+        PopupMenuButton<String>(
+          tooltip: 'الإبلاغ أو الحظر',
+          onSelected: (value) {
+            if (value == 'report_listing') _reportListing();
+            if (value == 'report_user') _reportUser();
+            if (value == 'block_user') _blockSeller();
+          },
+          itemBuilder: (_) => const [
+            PopupMenuItem(value: 'report_listing', child: Text('الإبلاغ عن الإعلان')),
+            PopupMenuItem(value: 'report_user', child: Text('الإبلاغ عن المستخدم')),
+            PopupMenuItem(value: 'block_user', child: Text('حظر المستخدم')),
+          ],
+        ),
+      ]),
       body: ListView(padding: const EdgeInsets.all(13), children: [
         Container(height: 290, color: Colors.black12, alignment: Alignment.center, child: x.photos.isEmpty ? Text(MarketCategory.byId(x.category).emoji, style: const TextStyle(fontSize: 75)) : Image.network(x.photos[active], fit: BoxFit.contain)),
         if (x.photos.length > 1) SizedBox(height: 88, child: ListView(scrollDirection: Axis.horizontal, children: [for (var i = 0; i < x.photos.length; i++) GestureDetector(onTap: () => setState(() => active = i), child: Container(width: 82, margin: const EdgeInsets.all(4), decoration: BoxDecoration(border: Border.all(color: active == i ? green : Colors.transparent, width: 3)), child: Image.network(x.photos[i], fit: BoxFit.cover)))])),
@@ -1134,10 +1281,12 @@ class _ChatPageState extends State<ChatPage> {
   final input = TextEditingController();
   bool sending = false;
   late Future<List<Map<String, dynamic>>> messageFuture;
+  late Future<Map<String, String>> participantNamesFuture;
   Timer? refreshTimer;
   @override void initState() {
     super.initState();
     messageFuture = MarketService.instance.messages(widget.id);
+    participantNamesFuture = MarketService.instance.conversationParticipantNames(widget.id);
     refreshTimer = Timer.periodic(const Duration(seconds: 4), (_) {
       if (mounted) setState(() => messageFuture = MarketService.instance.messages(widget.id));
     });
@@ -1158,7 +1307,31 @@ class _ChatPageState extends State<ChatPage> {
     Expanded(child: FutureBuilder<List<Map<String, dynamic>>>(future: messageFuture, builder: (c, s) {
       if (s.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
       if (s.hasError) return Center(child: Text(_cleanError(s.error)));
-      return ListView(padding: const EdgeInsets.all(12), children: (s.data ?? []).map((m) { final mine = m['sender_id'] == MarketService.instance.user?.id; return Align(alignment: mine ? Alignment.centerRight : Alignment.centerLeft, child: Container(margin: const EdgeInsets.all(4), padding: const EdgeInsets.all(12), constraints: const BoxConstraints(maxWidth: 300), decoration: BoxDecoration(color: mine ? const Color(0xFFDDF3E3) : Colors.white, borderRadius: BorderRadius.circular(12)), child: Text(m['body'].toString()))); }).toList());
+      return FutureBuilder<Map<String, String>>(
+        future: participantNamesFuture,
+        builder: (context, namesSnapshot) {
+          final names = namesSnapshot.data ?? const <String, String>{};
+          return ListView(padding: const EdgeInsets.all(12), children: (s.data ?? []).map((m) {
+            final senderId = m['sender_id'].toString();
+            final mine = senderId == MarketService.instance.user?.id;
+            final senderName = names[senderId] ?? (mine ? 'أنا' : 'مستخدم');
+            return Align(
+              alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+              child: Container(
+                margin: const EdgeInsets.all(4),
+                padding: const EdgeInsets.all(12),
+                constraints: const BoxConstraints(maxWidth: 300),
+                decoration: BoxDecoration(color: mine ? const Color(0xFFDDF3E3) : Colors.white, borderRadius: BorderRadius.circular(12)),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                  Text(senderName, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: green)),
+                  const SizedBox(height: 4),
+                  Text(m['body'].toString()),
+                ]),
+              ),
+            );
+          }).toList());
+        },
+      );
     })),
     SafeArea(child: Row(children: [Expanded(child: TextField(controller: input, decoration: const InputDecoration(hintText: 'اكتب رسالتك'))), IconButton(onPressed: sending ? null : send, icon: const Icon(Icons.send, color: green))])),
   ]));
