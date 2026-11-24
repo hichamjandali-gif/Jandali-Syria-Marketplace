@@ -13,8 +13,6 @@ on:
       - main
     paths:
       - ".github/workflows/release-friends.yml"
-    tags:
-      - "v*"
 
 permissions:
   contents: write
