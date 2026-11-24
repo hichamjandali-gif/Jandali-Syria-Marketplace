@@ -21,7 +21,7 @@ const anon = const String.fromEnvironment('SUPABASE_ANON_KEY');
 const green = Color(0xFF178447);
 
 String _cleanError(Object? error) => (error?.toString() ?? '')
-    .replaceFirst(RegExp(r'^[A-Za-z]+Exception:\s*'), '')
+    .replaceFirst(RegExp(r'^(?:Exception|[A-Za-z]+Exception):\s*'), '')
     .trim();
 
 Future<void> main() async {
