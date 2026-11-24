@@ -49,11 +49,11 @@ class MarketService {
   User? get user=>db.auth.currentUser;
   final _uuid=const Uuid();
 
-  Future<List<MarketListing>> loadListings({String? category,String? city,String query=''}) async {
+  Future<List<MarketListing>> loadListings({String? category,String? city,String query='',int offset=0,int limit=200}) async {
     var req=db.from('market_listings').select().eq('status','active');
     if(category!=null&&category.isNotEmpty) req=req.eq('category',category);
     if(city!=null&&city.trim().isNotEmpty) req=req.ilike('city','%${city.trim()}%');
-    final r=await req.order('created_at',ascending:false).limit(200);
+    final r=await req.order('created_at',ascending:false).range(offset, offset + limit - 1);
     final items=r.map((e)=>MarketListing.fromMap(e)).toList();
     final q=query.trim().toLowerCase();
     if(q.isEmpty)return items;
