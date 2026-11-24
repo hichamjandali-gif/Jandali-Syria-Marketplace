@@ -309,6 +309,14 @@ class MarketService {
         .eq('blocker_id', u.id).eq('blocked_user_id', targetUserId);
   }
 
+  Future<void> acceptTerms() async {
+    final u = user;
+    if (u == null) throw Exception('سجّل الدخول أولاً');
+    await db.from('market_profiles').update({
+      'terms_accepted_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('user_id', u.id);
+  }
+
   Future<void> deleteAccount() async {
     if (user == null) throw Exception('سجّل الدخول أولاً');
     final response = await db.functions.invoke('delete-account');
