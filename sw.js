@@ -1,5 +1,5 @@
-const CACHE = "jandali-market-landing-v2";
-const PREFIX = "jandali-market-shell-";
+const CACHE = "jandali-market-landing-v3";
+const CACHE_PREFIX = "jandali-market-landing-";
 const SHELL = ["./", "./index.html"];
 
 self.addEventListener("install", (event) => {
@@ -10,7 +10,7 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((key) => key.startsWith(PREFIX) && key !== CACHE).map((key) => caches.delete(key)))
+      Promise.all(keys.filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE).map((key) => caches.delete(key)))
     ).then(() => self.clients.claim())
   );
 });
@@ -22,12 +22,9 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin || !url.pathname.startsWith("/Jandali-Syria-Marketplace/")) return;
   const isLanding = url.pathname.endsWith("/Jandali-Syria-Marketplace/") ||
     url.pathname.endsWith("/Jandali-Syria-Marketplace/index.html");
-  if (!isLanding) {
-    event.respondWith(fetch(request));
-    return;
-  }
+  if (!isLanding) return;
   event.respondWith(
-    fetch(request).then((response) => {
+    fetch(request, { cache: "no-store" }).then((response) => {
       if (response.ok) {
         const copy = response.clone();
         caches.open(CACHE).then((cache) => cache.put(request, copy));
