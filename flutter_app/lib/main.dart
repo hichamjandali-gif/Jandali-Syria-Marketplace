@@ -1106,7 +1106,7 @@ class _MapPageState extends State<MapPage> {
   }
   Future<void> locate() async {
     try { var p = await Geolocator.checkPermission(); if (p == LocationPermission.denied) p = await Geolocator.requestPermission(); if (p == LocationPermission.denied || p == LocationPermission.deniedForever) throw Exception('اسمح بالوصول للموقع'); final pos = await Geolocator.getCurrentPosition(); point = LatLng(pos.latitude, pos.longitude); await reverse(point); }
-    catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()))); }
+    catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_cleanError(e)))); }
   }
   Future<void> reverse(LatLng p) async {
     setState(() => busy = true);
