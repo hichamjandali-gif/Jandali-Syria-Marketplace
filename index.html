@@ -27,5 +27,12 @@
     <p>نجهّز رابطاً رسمياً ثابتاً وآمناً. لا تستخدم روابط تنزيل غير رسمية.</p>
     <footer>السوق العربي · النسخة الجديدة</footer>
   </main>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.js").catch(() => {});
+      });
+    }
+  </script>
 </body>
 </html>
