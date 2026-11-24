@@ -81,6 +81,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import re
+          import os
           gradle = Path("android/app/build.gradle.kts")
           if not gradle.exists():
               raise SystemExit("Expected Kotlin Gradle file is missing")
