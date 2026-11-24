@@ -1580,3 +1580,116 @@ class _EditAdPageState extends State<EditAdPage> {
     ]),
   );
 }
+
+class BlockedUsersPage extends StatefulWidget {
+  const BlockedUsersPage({super.key});
+  @override State<BlockedUsersPage> createState() => _BlockedUsersPageState();
+}
+
+class _BlockedUsersPageState extends State<BlockedUsersPage> {
+  late Future<List<Map<String, dynamic>>> future;
+  @override void initState() {
+    super.initState();
+    future = MarketService.instance.blockedUsers();
+  }
+
+  Future<void> _unblock(String id) async {
+    try {
+      await MarketService.instance.unblockUser(id);
+      if (mounted) setState(() => future = MarketService.instance.blockedUsers());
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تعذر إلغاء الحظر. حاول مرة أخرى')));
+    }
+  }
+
+  @override Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('المستخدمون المحظورون')),
+    body: FutureBuilder<List<Map<String, dynamic>>>(
+      future: future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+        if (snapshot.hasError) return const Center(child: Text('تعذر تحميل قائمة الحظر'));
+        final rows = snapshot.data ?? [];
+        if (rows.isEmpty) return const Center(child: Text('لا يوجد مستخدمون محظورون'));
+        return ListView(children: rows.map((row) => ListTile(
+          leading: const Icon(Icons.block, color: Colors.red),
+          title: Text(row['display_name']?.toString() ?? 'مستخدم'),
+          trailing: TextButton(onPressed: () => _unblock(row['user_id'].toString()), child: const Text('إلغاء الحظر')),
+        )).toList());
+      },
+    ),
+  );
+}
+
+class PrivacyTermsPage extends StatefulWidget {
+  const PrivacyTermsPage({super.key});
+  @override State<PrivacyTermsPage> createState() => _PrivacyTermsPageState();
+}
+
+class _PrivacyTermsPageState extends State<PrivacyTermsPage> {
+  bool saving = false;
+
+  Future<void> _accept() async {
+    if (MarketService.instance.user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تُسجّل الموافقة عند إنشاء الحساب')));
+      return;
+    }
+    setState(() => saving = true);
+    try {
+      await MarketService.instance.acceptTerms();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تسجيل موافقتك على الشروط')));
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تعذر تسجيل الموافقة. حاول مرة أخرى')));
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  Widget _section(String title, String body) => Padding(
+    padding: const EdgeInsets.only(bottom: 18),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: green)),
+      const SizedBox(height: 6),
+      Text(body, style: const TextStyle(fontSize: 14, height: 1.7)),
+    ]),
+  );
+
+  @override Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('الخصوصية وشروط الاستخدام')),
+    body: ListView(padding: const EdgeInsets.all(16), children: [
+      const Text('السوق العربي — نسخة الأصدقاء 1.0', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+      const SizedBox(height: 6),
+      const Text('آخر تحديث: 24 نوفمبر 2026', style: TextStyle(color: Colors.black54)),
+      const SizedBox(height: 16),
+      _section('أولاً: البيانات التي يستخدمها التطبيق',
+        'عند إنشاء الحساب نعالج البريد الإلكتروني والاسم الذي تختاره. وعند نشر إعلان قد نعالج العنوان والوصف والقسم والمدينة والحي ورقم التواصل والصور وإحداثيات الموقع التي تختارها. كما نخزن المحادثات والرسائل والبلاغات وطلبات الحظر اللازمة لتشغيل السوق وحماية المستخدمين.'),
+      _section('ثانياً: كيف تُستخدم البيانات',
+        'تُستخدم البيانات لإنشاء الحساب وتسجيل الدخول ونشر الإعلانات وعرضها وإدارة المحادثات والبلاغات والحظر وحماية الخدمة. الإعلانات والصور المنشورة تكون ظاهرة لمستخدمي السوق. لا تنشر في الإعلان بيانات لا تريد أن يراها الآخرون.'),
+      _section('ثالثاً: مزودو الخدمة والخدمات الخارجية',
+        'تُخزّن بيانات الحساب والإعلانات والرسائل في بنية Supabase المستخدمة لتشغيل قاعدة البيانات والمصادقة والتخزين. تستخدم الخرائط والبحث عن المواقع خدمات OpenStreetMap، وقد تُعالج ميزة الإملاء الصوتي عبر خدمة التعرف على الكلام التي يوفرها نظام الهاتف بحسب إعدادات جهازك.'),
+      _section('رابعاً: الموقع والصور والصوت',
+        'لاختيار موقع الإعلان يمكنك تحديد النقطة على الخريطة أو استخدام موقع الجهاز إذا منحت الإذن. إحداثيات الإعلان التي تحفظها تُعرض مع الإعلان. يختار المستخدم الصور التي يرفعها بنفسه. ميزة الإملاء تستخدم الميكروفون عند تشغيلها؛ لا تستخدمها إذا لم ترغب في ذلك.'),
+      _section('خامساً: الاحتفاظ بالبيانات وحذف الحساب',
+        'تبقى بيانات الحساب والإعلانات والمحادثات ما دام الحساب فعالاً أو ما دامت لازمة لتشغيل الخدمة. يمكنك طلب حذف الحساب من داخل التطبيق. يؤدي الحذف إلى إزالة الحساب وإعلاناته وصورها ومحادثاته وملف الاسم وبيانات الحظر المرتبطة به. قد تبقى سجلات بلاغات لازمة لمراجعة إساءة الاستخدام بعد فصلها عن الحساب المحذوف.'),
+      _section('سادساً: الأمان',
+        'نستخدم تسجيل الدخول وصلاحيات قاعدة البيانات للحد من الوصول إلى بيانات الحساب والمحادثات. لا تشارك كلمة المرور أو رموز تأكيد البريد مع أي شخص. لا توجد وسيلة نقل أو تخزين إلكتروني خالية تماماً من المخاطر.'),
+      _section('سابعاً: شروط الاستخدام',
+        'يجب أن تكون المعلومات والصور التي تنشرها صحيحة وأن تملك حق استخدامها. يُمنع نشر المحتوى الاحتيالي أو المخالف للقانون أو المسيء أو الذي ينتهك حقوق الآخرين أو خصوصيتهم. لا تستخدم السوق لإرسال الرسائل المزعجة أو التهديد أو المضايقة.'),
+      _section('ثامناً: البلاغات والحظر والإشراف',
+        'يمكنك الإبلاغ عن إعلان أو مستخدم وحظر الحسابات التي تزعجك. يجوز لإدارة السوق مراجعة البلاغات واتخاذ إجراء مناسب، مثل إخفاء إعلان أو تقييد حساب، عند إساءة الاستخدام أو مخالفة الشروط.'),
+      _section('تاسعاً: التعاملات بين المستخدمين',
+        'السوق منصة لعرض الإعلانات والتواصل بين المستخدمين، وليس طرفاً في البيع أو الشراء أو التوظيف. تحقق بنفسك من هوية الطرف الآخر وحالة السلعة والسعر وطريقة الدفع والاستلام، ولا ترسل أموالاً أو بيانات حساسة قبل التحقق.'),
+      _section('عاشراً: الإعلانات والمدفوعات',
+        'هذه النسخة لا تتضمن حالياً اشتراكات أو مدفوعات داخل التطبيق أو إعلانات تجارية مدفوعة. إذا أضيفت هذه الخدمات لاحقاً فسيتم تحديث الشروط وإشعار المستخدمين قبل تفعيلها.'),
+      _section('بيانات مسؤول التطبيق والتواصل',
+        'لم تُسجّل بعد بيانات الجهة أو الشخص المسؤول قانونياً عن تشغيل التطبيق، وعنوان المراسلة الرسمي، وبريد مخصص لطلبات الخصوصية. يجب على صاحب المشروع استكمال هذه البيانات قبل الإطلاق للأصدقاء خارج دائرة الاختبار.'),
+      if (MarketService.instance.user != null)
+        FilledButton(
+          onPressed: saving ? null : _accept,
+          child: Text(saving ? 'جارٍ التسجيل...' : 'أوافق على سياسة الخصوصية وشروط الاستخدام'),
+        )
+      else
+        const Text('عند إنشاء حساب جديد، يلزم تحديد مربع الموافقة قبل المتابعة.', style: TextStyle(fontWeight: FontWeight.bold)),
+    ]),
+  );
+}
