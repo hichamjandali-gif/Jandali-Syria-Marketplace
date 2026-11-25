@@ -1,4 +1,4 @@
-name: Build Arab Market signed test APK
+name: Build Arab Market HTML wrapper signed APK or AAB
 
 on:
   workflow_dispatch:
