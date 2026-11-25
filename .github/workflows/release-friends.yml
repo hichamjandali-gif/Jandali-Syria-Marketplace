@@ -100,35 +100,45 @@ jobs:
           if 'signingConfig = signingConfigs.getByName("release")' not in text:
               raise SystemExit("Permanent release signing was not configured")
           gradle.write_text(text)
+          # Edit AndroidManifest.xml as XML, not string substitutions, to avoid malformed markup.
+          import xml.etree.ElementTree as ET
+          ET.register_namespace("android", "http://schemas.android.com/apk/res/android")
+          ANDROID = "{http://schemas.android.com/apk/res/android}"
           manifest = Path("android/app/src/main/AndroidManifest.xml")
-          m = manifest.read_text()
-          m = re.sub(r'android:label="[^"]+"', 'android:label="السوق العربي"', m, count=1)
-          m = re.sub(r'<application', '<application android:icon="@drawable/market_launcher"', m, count=1)
-          deep_link = """
-                  <intent-filter>
-                      <action android:name="android.intent.action.VIEW" />
-                      <category android:name="android.intent.category.DEFAULT" />
-                      <category android:name="android.intent.category.BROWSABLE" />
-                      <data android:scheme="jandaliarabmarket" android:host="login-callback" />
-                  </intent-filter>
-          """
-          if 'android:scheme="jandaliarabmarket"' not in m:
-              m = m.replace('</activity>', deep_link + '\n            </activity>', 1)
-          if 'android:scheme="jandaliarabmarket"' not in m:
-              raise SystemExit("Email confirmation deep-link filter was not inserted")
-          manifest.write_text(m)
-          icon = Path("android/app/src/main/res/drawable/market_launcher.xml")
-          icon.write_text("""<vector xmlns:android="http://schemas.android.com/apk/res/android"
-              android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-              <path android:fillColor="#147A3C" android:pathData="M0,0h108v108h-108z"/>
-              <path android:fillColor="#FFFFFF" android:pathData="M10,47L36,24L62,47L57,53L36,35L15,53z M17,49h38v35h-38z"/>
-              <path android:fillColor="#147A3C" android:pathData="M31,64h11v20h-11z"/>
-              <path android:fillColor="#BDEBC8" android:pathData="M45,57h7v8h-7z"/>
-              <path android:fillColor="#FFD34E" android:pathData="M62,58h26c4,0 7,3 7,7v11h-40v-11c0,-4 3,-7 7,-7z M66,58l6,-9h12l7,9z"/>
-              <path android:fillColor="#FFFFFF" android:pathData="M55,75h42v5h-42z"/>
-              <path android:fillColor="#FFFFFF" android:pathData="M59,80a6,6 0,1 0,12 0a6,6 0,1 0,-12 0 M82,80a6,6 0,1 0,12 0a6,6 0,1 0,-12 0"/>
-              <path android:fillColor="#F7FFF8" android:pathData="M62,83h33l-5,13h-23z"/>
-          </vector>""")
+          tree = ET.parse(manifest)
+          root = tree.getroot()
+          app = root.find("application")
+          if app is None:
+              raise SystemExit("AndroidManifest.xml has no application element")
+          app.set(ANDROID + "label", "السوق العربي")
+          app.set(ANDROID + "icon", "@drawable/market_launcher")
+          activity = None
+          for candidate in app.findall("activity"):
+              names = [x.get(ANDROID + "name") for x in candidate.findall("intent-filter/action")]
+              categories = [x.get(ANDROID + "name") for x in candidate.findall("intent-filter/category")]
+              if "android.intent.action.MAIN" in names and "android.intent.category.LAUNCHER" in categories:
+                  activity = candidate
+                  break
+          if activity is None:
+              raise SystemExit("Could not locate the launcher activity in AndroidManifest.xml")
+          has_deep_link = any(
+              data.get(ANDROID + "scheme") == "jandaliarabmarket"
+              and data.get(ANDROID + "host") == "login-callback"
+              for filt in activity.findall("intent-filter")
+              for data in filt.findall("data")
+          )
+          if not has_deep_link:
+              filt = ET.SubElement(activity, "intent-filter")
+              ET.SubElement(filt, "action", {ANDROID + "name": "android.intent.action.VIEW"})
+              ET.SubElement(filt, "category", {ANDROID + "name": "android.intent.category.DEFAULT"})
+              ET.SubElement(filt, "category", {ANDROID + "name": "android.intent.category.BROWSABLE"})
+              ET.SubElement(filt, "data", {
+                  ANDROID + "scheme": "jandaliarabmarket",
+                  ANDROID + "host": "login-callback"
+              })
+          tree.write(manifest, encoding="utf-8", xml_declaration=True)
+          # Parse the written file once more before Gradle starts.
+          ET.parse(manifest)
           PY
           echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > release.keystore
           test -s release.keystore
