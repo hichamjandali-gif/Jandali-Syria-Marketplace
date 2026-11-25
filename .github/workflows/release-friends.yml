@@ -28,6 +28,9 @@ jobs:
           channel: stable
           cache: true
 
+      # The HTML wrapper loads the already-hosted HTML marketplace.
+      # Supabase is configured by that hosted page; this Android build needs
+      # no SUPABASE_ANON_KEY secret and performs no legacy-JWT validation.
       - name: Require permanent Android signing key
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
