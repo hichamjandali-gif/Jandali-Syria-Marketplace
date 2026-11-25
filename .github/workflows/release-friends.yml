@@ -47,14 +47,10 @@ jobs:
           flutter create --platforms=android --org com.jandali --project-name arabmarket _android_scaffold
           cp -R _android_scaffold/android ./android
           cp _android_scaffold/.metadata .metadata
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-          files = list(Path('android/app/src/main').rglob('MainActivity.kt'))
-          if len(files) != 1:
-              raise SystemExit(f'Expected exactly one MainActivity.kt, found {len(files)}')
-          source = files[0].read_text()
-          if not re.search(r'^package\s+com\.jandali\.arabmarket\s*
+          MAIN_ACTIVITY=$(find android/app/src/main -name MainActivity.kt -print -quit)
+          test -n "$MAIN_ACTIVITY"
+          grep -q '^package com.jandali.arabmarket$' "$MAIN_ACTIVITY" || { echo 'MainActivity package mismatch'; exit 1; }
+          rm -rf _android_scaffold
           mkdir -p android/app/src/main/res/drawable
           cat > android/app/src/main/res/drawable/market_launcher.xml <<'XML'
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
