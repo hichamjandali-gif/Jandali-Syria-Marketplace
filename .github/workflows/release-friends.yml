@@ -89,14 +89,14 @@ jobs:
               }
           '''
           if "signingConfigs {" not in text:
-              text = text.replace("android {", "android {\\n" + signing, 1)
-          release_block = re.search(r'(buildTypes\\s*\\{\\s*release\\s*\\{)', text)
+              text = text.replace("android {", "android {\n" + signing, 1)
+          release_block = re.search(r'(buildTypes\s*\{\s*release\s*\{)', text)
           if not release_block:
               raise SystemExit("Could not locate Android release build type for signing")
           tail = text[release_block.end():]
-          if "signingConfig = signingConfigs.getByName(\\"release\\")" not in tail.split("}", 1)[0]:
-              text = text[:release_block.end()] + '\\n            signingConfig = signingConfigs.getByName("release")' + text[release_block.end():]
-          text = re.sub(r'signingConfig\\s*=\\s*signingConfigs\\.getByName\\("debug"\\)', 'signingConfig = signingConfigs.getByName("release")', text)
+          if "signingConfig = signingConfigs.getByName(\"release\")" not in tail.split("}", 1)[0]:
+              text = text[:release_block.end()] + '\n            signingConfig = signingConfigs.getByName("release")' + text[release_block.end():]
+          text = re.sub(r'signingConfig\s*=\s*signingConfigs\.getByName\("debug"\)', 'signingConfig = signingConfigs.getByName("release")', text)
           if 'signingConfig = signingConfigs.getByName("release")' not in text:
               raise SystemExit("Permanent release signing was not configured")
           gradle.write_text(text)
