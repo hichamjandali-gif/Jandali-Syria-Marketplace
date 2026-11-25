@@ -174,7 +174,7 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          flutter build apk --release --stacktrace --info \
+          flutter build apk --release \
             --build-name=${{ steps.version.outputs.version }} \
             --build-number=${{ github.run_number }} \
             --dart-define=SUPABASE_URL=https://xhyobwcaljmoakyvjajb.supabase.co \
