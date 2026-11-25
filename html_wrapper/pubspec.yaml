@@ -1,0 +1,22 @@
+name: jandali_market_html
+description: HTML marketplace WebView wrapper for the original Arab Market.
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  webview_flutter: ^4.14.1
+  webview_flutter_android: ^4.14.1
+  image_picker: ^1.2.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
