@@ -1,4 +1,4 @@
-const CACHE = "jandali-market-landing-v3";
+const CACHE = "jandali-market-landing-v4";
 const CACHE_PREFIX = "jandali-market-landing-";
 const SHELL = ["./", "./index.html"];
 
