@@ -36,6 +36,25 @@ jobs:
           case "$SUPABASE_ANON_KEY" in
             sb_secret_*|*service_role*) echo "::error::A secret/service_role key must never be embedded in a mobile app."; exit 1 ;;
           esac
+          # Verify the legacy anon JWT belongs to this exact Supabase project.
+          # Never print the key or its decoded payload.
+          python3 - <<'PY'
+          import os, json, base64, sys
+          token = os.environ["SUPABASE_ANON_KEY"].strip()
+          parts = token.split(".")
+          if len(parts) != 3:
+              sys.exit("SUPABASE_ANON_KEY is not a verifiable legacy JWT; expected project-bound anon JWT.")
+          payload = parts[1] + "=" * (-len(parts[1]) % 4)
+          try:
+              claims = json.loads(base64.urlsafe_b64decode(payload))
+          except Exception:
+              sys.exit("SUPABASE_ANON_KEY JWT payload could not be decoded.")
+          if claims.get("ref") != "xhyobwcaljmoakyvjajb":
+              sys.exit("SUPABASE_ANON_KEY belongs to a different Supabase project (expected xhyobwcaljmoakyvjajb).")
+          if claims.get("role") != "anon":
+              sys.exit("SUPABASE_ANON_KEY JWT role is not anon; refusing to embed it.")
+          print("Supabase key check passed: correct project ref and anon role. Key value was not displayed.")
+          PY
       - name: Generate Android project, app identity, icon and signing config
         working-directory: flutter_app
         env:
