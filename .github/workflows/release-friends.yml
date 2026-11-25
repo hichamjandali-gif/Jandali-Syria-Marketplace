@@ -77,6 +77,28 @@ jobs:
           text = re.sub(r'applicationId = "[^"]+"', 'applicationId = "com.jandali.arabmarket"', text, count=1)
           if 'applicationId = "com.jandali.arabmarket"' not in text:
               raise SystemExit("Could not set official applicationId")
+          # Wire the permanent keystore into the generated Android release signing config.
+          signing = '''
+              signingConfigs {
+                  create("release") {
+                      storeFile = file(System.getenv("ANDROID_KEYSTORE_PATH") ?: error("ANDROID_KEYSTORE_PATH missing"))
+                      storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: error("ANDROID_KEYSTORE_PASSWORD missing")
+                      keyAlias = System.getenv("ANDROID_KEY_ALIAS") ?: error("ANDROID_KEY_ALIAS missing")
+                      keyPassword = System.getenv("ANDROID_KEY_PASSWORD") ?: error("ANDROID_KEY_PASSWORD missing")
+                  }
+              }
+          '''
+          if "signingConfigs {" not in text:
+              text = text.replace("android {", "android {\\n" + signing, 1)
+          release_block = re.search(r'(buildTypes\\s*\\{\\s*release\\s*\\{)', text)
+          if not release_block:
+              raise SystemExit("Could not locate Android release build type for signing")
+          tail = text[release_block.end():]
+          if "signingConfig = signingConfigs.getByName(\\"release\\")" not in tail.split("}", 1)[0]:
+              text = text[:release_block.end()] + '\\n            signingConfig = signingConfigs.getByName("release")' + text[release_block.end():]
+          text = re.sub(r'signingConfig\\s*=\\s*signingConfigs\\.getByName\\("debug"\\)', 'signingConfig = signingConfigs.getByName("release")', text)
+          if 'signingConfig = signingConfigs.getByName("release")' not in text:
+              raise SystemExit("Permanent release signing was not configured")
           gradle.write_text(text)
           manifest = Path("android/app/src/main/AndroidManifest.xml")
           m = manifest.read_text()
@@ -109,6 +131,8 @@ jobs:
           </vector>""")
           PY
           echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > release.keystore
+          test -s release.keystore
+          keytool -list -keystore release.keystore -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null
           echo "ANDROID_KEYSTORE_PATH=$PWD/release.keystore" >> "$GITHUB_ENV"
 
       - name: Install dependencies and analyze
@@ -117,7 +141,7 @@ jobs:
           flutter pub get
           flutter analyze --no-fatal-infos
 
-      - name: Build friends-only APK (debug signing when permanent secrets are absent)
+      - name: Build friends-only APK with permanent release signing
         working-directory: flutter_app
         env:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
