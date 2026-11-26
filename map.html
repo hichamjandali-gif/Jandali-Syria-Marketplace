@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>خريطة السوق العربي</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" crossorigin="" onerror="this.onerror=null;this.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'">
   <style>
     html,body,#map{width:100%;height:100%;margin:0;padding:0;background:#e8eaed}
     body{overflow:hidden;font-family:system-ui,Tahoma,sans-serif}
@@ -17,7 +17,7 @@
 <body>
   <div id="map" role="application" aria-label="خريطة OpenStreetMap"></div>
   <div id="error" class="map-error" hidden>تعذر تحميل مكتبة الخريطة. ما زال بإمكانك اختيار المدينة وتأكيد الموقع.</div>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" crossorigin="" onerror="this.onerror=null;const fallback=document.createElement('script');fallback.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';document.head.appendChild(fallback)"></script>
   <script>
     (function(){
       const params=new URLSearchParams(location.search);
