@@ -116,7 +116,12 @@ jobs:
           manifest = Path("android/app/src/main/AndroidManifest.xml")
           tree = ET.parse(manifest)
           root = tree.getroot()
-          for permission in ("android.permission.INTERNET", "android.permission.CAMERA"):
+          for permission in (
+              "android.permission.INTERNET",
+              "android.permission.CAMERA",
+              "android.permission.ACCESS_COARSE_LOCATION",
+              "android.permission.ACCESS_FINE_LOCATION",
+          ):
               if not any(item.get(ANDROID + "name") == permission for item in root.findall("uses-permission")):
                   root.insert(0, ET.Element("uses-permission", {ANDROID + "name": permission}))
           app = root.find("application")
