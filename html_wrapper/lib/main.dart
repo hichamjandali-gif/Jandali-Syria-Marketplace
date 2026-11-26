@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 const String marketUrl =
-    'https://hichamjandali-gif.github.io/Jandali-Syria-Marketplace/';
+    'https://hichamjandali-gif.github.io/Jandali-Syria-Marketplace/?jandaliNativeApp=1';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -53,6 +54,14 @@ class _MarketWebViewPageState extends State<MarketWebViewPage> {
       await controller.setBackgroundColor(Colors.white);
       await controller.setNavigationDelegate(
         NavigationDelegate(
+          onNavigationRequest: (request) {
+            final uri = Uri.tryParse(request.url);
+            if (uri != null && uri.scheme.toLowerCase() == 'https') {
+              return NavigationDecision.navigate;
+            }
+            // Ignore geo:, intent:, chrome:, tel:, file: and all non-HTTPS URLs.
+            return NavigationDecision.prevent;
+          },
           onProgress: (progress) {
             if (mounted) setState(() => _progress = progress);
           },
@@ -69,6 +78,9 @@ class _MarketWebViewPageState extends State<MarketWebViewPage> {
             if (mounted) setState(() => _loading = false);
           },
           onWebResourceError: (error) {
+            if (error.description.contains('ERR_UNKNOWN_URL_SCHEME')) {
+              return;
+            }
             if (error.isForMainFrame == true && mounted) {
               setState(() {
                 _failed = true;
@@ -85,6 +97,22 @@ class _MarketWebViewPageState extends State<MarketWebViewPage> {
         await android.setAllowFileAccess(true);
         await android.setAllowContentAccess(true);
         await android.setOnShowFileSelector(_selectFiles);
+        await android.setGeolocationEnabled(true);
+        await android.setGeolocationPermissionsPromptCallbacks(
+          onShowPrompt: (request) async {
+            if (request.origin != 'https://hichamjandali-gif.github.io') {
+              return const GeolocationPermissionsResponse(
+                allow: false,
+                retain: false,
+              );
+            }
+            final permission = await Permission.locationWhenInUse.request();
+            return GeolocationPermissionsResponse(
+              allow: permission.isGranted,
+              retain: permission.isGranted,
+            );
+          },
+        );
       }
 
       await controller.loadRequest(Uri.parse(marketUrl));
