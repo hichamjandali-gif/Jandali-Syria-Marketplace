@@ -47,7 +47,7 @@ async function publish(ad){
  const photos=Array.isArray(ad.images)?ad.images:[];
  for(let i=0;i<photos.length;i++){
   const src=photos[i];
-  if(typeof src!=="string"||!src.startsWith("data:image/"))throw Error("الصورة غير جاهزة للرفع");
+  if(typeof src!=="string"||!(/^(blob:|data:image\/)/i).test(src))throw Error("الصورة المضغوطة غير جاهزة للرفع");
   const blob=await(await fetch(src)).blob();
   if(blob.size>=2*1024*1024)throw Error("تعذر ضغط الصورة إلى أقل من 2 ميغابايت؛ أعد اختيار الصورة");
   const mime=blob.type==="image/png"?"png":blob.type==="image/webp"?"webp":"jpg";
