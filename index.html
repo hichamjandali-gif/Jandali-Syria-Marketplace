@@ -2754,6 +2754,39 @@ summary {
 </head>
 <body>
   <div id="root"></div>
+  <script>
+  (() => {
+    if (window.__jandaliNativeGeoInstalled || !window.JandaliLocation) return;
+    window.__jandaliNativeGeoInstalled = true;
+    let requestId = 0;
+    const pending = new Map();
+    window.__jandaliGeoResolve = (id, latitude, longitude, accuracy) => {
+      const callbacks = pending.get(String(id));
+      if (!callbacks) return;
+      pending.delete(String(id));
+      callbacks.success({coords:{latitude:Number(latitude),longitude:Number(longitude),accuracy:Number(accuracy)||0,altitude:null,altitudeAccuracy:null,heading:null,speed:null},timestamp:Date.now()});
+    };
+    window.__jandaliGeoReject = (id, code, message) => {
+      const callbacks = pending.get(String(id));
+      if (!callbacks) return;
+      pending.delete(String(id));
+      if (callbacks.failure) callbacks.failure({code,message});
+    };
+    const request = (success, failure) => {
+      const id = String(++requestId);
+      pending.set(id,{success,failure});
+      window.JandaliLocation.postMessage(id);
+      return Number(id);
+    };
+    const geolocation = {
+      getCurrentPosition(success,failure) { request(success,failure); },
+      watchPosition(success,failure) { return request(success,failure); },
+      clearWatch() {}
+    };
+    try { Object.defineProperty(navigator,"geolocation",{configurable:true,value:geolocation}); }
+    catch (_) { navigator.geolocation = geolocation; }
+  })();
+  </script>
   
 <script>
 window.jandaliPhoto=(()=>{
