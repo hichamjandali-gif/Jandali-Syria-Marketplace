@@ -9,7 +9,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 const String marketUrl =
-    'https://hichamjandali-gif.github.io/Jandali-Syria-Marketplace/?jandaliNativeApp=1';
+    'https://hichamjandali-gif.github.io/Jandali-Syria-Marketplace/?jandaliNativeApp=1&v=20261127-geo-photo';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
