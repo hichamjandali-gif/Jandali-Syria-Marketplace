@@ -45,18 +45,25 @@ async function publish(ad){
  if(!user){authModal();throw Error("سجّل الدخول أولاً، ثم انشر إعلانك")}
  const listingId=crypto.randomUUID(),urls=[],storagePaths=[];
  const photos=Array.isArray(ad.images)?ad.images:[];
- for(let i=0;i<photos.length;i++){
-  const src=photos[i];
-  if(typeof src!=="string"||!(/^(blob:|data:image\/)/i).test(src))throw Error("الصورة المضغوطة غير جاهزة للرفع");
+ const uploadResults=await Promise.allSettled(photos.map(async src=>{
+  if(typeof src!=="string"||!(/^(blob:|data:image\\/)/i).test(src))throw Error("الصورة المضغوطة غير جاهزة للرفع");
   const blob=await(await fetch(src)).blob();
   if(blob.size>=2*1024*1024)throw Error("تعذر ضغط الصورة إلى أقل من 2 ميغابايت؛ أعد اختيار الصورة");
   const mime=blob.type==="image/png"?"png":blob.type==="image/webp"?"webp":"jpg";
   const name=user.id+"/"+listingId+"/"+crypto.randomUUID()+"."+mime;
   const uploaded=await db.storage.from("market-photos").upload(name,blob,{contentType:blob.type||"image/jpeg",upsert:false});
   if(uploaded.error)throw uploaded.error;
-  storagePaths.push(name);
-  urls.push(db.storage.from("market-photos").getPublicUrl(name).data.publicUrl);
+  return {name,url:db.storage.from("market-photos").getPublicUrl(name).data.publicUrl};
+ }));
+ const completed=uploadResults.filter(result=>result.status==="fulfilled").map(result=>result.value);
+ const failedUpload=uploadResults.find(result=>result.status==="rejected");
+ if(failedUpload){
+  const cleanup=completed.map(item=>item.name);
+  if(cleanup.length)await db.storage.from("market-photos").remove(cleanup);
+  throw failedUpload.reason;
  }
+ storagePaths.push(...completed.map(item=>item.name));
+ urls.push(...completed.map(item=>item.url));
  const row={id:listingId,owner_id:user.id,title:ad.title,description:ad.desc||ad.title,category:ad.categoryId,city:ad.city,contact_phone:ad.phone||null,district:ad.district||null,price:ad.isFree?0:(ad.priceNum||null),currency:ad.price?.includes("$")?"USD":"SYP",photo_urls:urls};
  const saved=await db.from("market_listings").insert(row).select("id,photo_urls").single();
  if(saved.error){
