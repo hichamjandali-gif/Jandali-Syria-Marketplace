@@ -111,8 +111,8 @@ class _MarketWebViewPageState extends State<MarketWebViewPage> {
         await android.setGeolocationEnabled(false);
       }
 
-      await controller.loadRequest(Uri.parse(marketUrl));
       if (mounted) setState(() => _controller = controller);
+      await controller.loadRequest(Uri.parse(marketUrl));
     } catch (error) {
       if (mounted) {
         setState(() {
@@ -237,19 +237,23 @@ class _MarketWebViewPageState extends State<MarketWebViewPage> {
       if (params.isCaptureEnabled) {
         final photo = await _picker.pickImage(
           source: ImageSource.camera,
-          imageQuality: 100,
+          imageQuality: 70,
+          maxWidth: 1200,
+          maxHeight: 1200,
         );
         return photo == null ? <String>[] : <String>[_fileUri(photo)];
       }
 
       if (params.mode == FileSelectorMode.openMultiple) {
-        final photos = await _picker.pickMultiImage(imageQuality: 100);
+        final photos = await _picker.pickMultiImage(imageQuality: 70, maxWidth: 1200, maxHeight: 1200);
         return photos.map(_fileUri).toList(growable: false);
       }
 
       final photo = await _picker.pickImage(
         source: ImageSource.gallery,
-        imageQuality: 100,
+        imageQuality: 70,
+          maxWidth: 1200,
+          maxHeight: 1200,
       );
       return photo == null ? <String>[] : <String>[_fileUri(photo)];
     } catch (_) {
