@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -174,9 +175,9 @@ class _MarketWebViewPageState extends State<MarketWebViewPage> {
     if (controller == null) return;
 
     Future<void> reject(int code, String message) async {
-      final safeMessage = message.replaceAll(r'\', r'\\').replaceAll("'", r"\'");
+      final encodedMessage = jsonEncode(message);
       await controller.runJavaScript(
-        "window.__jandaliGeoReject?.('$id', $code, '$safeMessage');",
+        "window.__jandaliGeoReject?.('$id', $code, $encodedMessage);",
       );
     }
 
