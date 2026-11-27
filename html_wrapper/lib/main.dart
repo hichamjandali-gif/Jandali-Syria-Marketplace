@@ -3,8 +3,8 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 
@@ -54,7 +54,12 @@ class _MarketWebViewPageState extends State<MarketWebViewPage> {
     try {
       final controller = WebViewController();
       await controller.setJavaScriptMode(JavaScriptMode.unrestricted);
-      await controller.addJavaScriptChannel('JandaliLocation', onMessageReceived: (message) { unawaited(_handleNativeLocationRequest(message.message)); });
+      await controller.addJavaScriptChannel(
+        'JandaliLocation',
+        onMessageReceived: (message) {
+          unawaited(_handleNativeLocationRequest(message.message));
+        },
+      );
       await controller.setBackgroundColor(Colors.white);
       await controller.setNavigationDelegate(
         NavigationDelegate(
