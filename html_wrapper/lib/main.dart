@@ -205,7 +205,7 @@ class _MarketWebViewPageState extends State<MarketWebViewPage> {
         ),
       );
       await controller.runJavaScript(
-        "window.__jandaliGeoResolve?.('$id', \${position.latitude}, \${position.longitude}, \${position.accuracy});",
+        "window.__jandaliGeoResolve?.('$id', ${position.latitude}, ${position.longitude}, ${position.accuracy});",
       );
     } catch (error) {
       await reject(2, 'تعذر تحديد GPS: $error');
