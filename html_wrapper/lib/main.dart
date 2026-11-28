@@ -100,10 +100,7 @@ class _MarketWebViewPageState extends State<MarketWebViewPage> {
         await android.setGeolocationEnabled(true);
         await android.setGeolocationPermissionsPromptCallbacks(
           onShowPrompt: (request) async {
-            final origin = Uri.tryParse(request.origin);
-            if (origin == null ||
-                origin.scheme != 'https' ||
-                origin.host != 'hichamjandali-gif.github.io') {
+            if (request.origin != 'https://hichamjandali-gif.github.io') {
               return const GeolocationPermissionsResponse(
                 allow: false,
                 retain: false,
@@ -165,9 +162,7 @@ class _MarketWebViewPageState extends State<MarketWebViewPage> {
 
       final photo = await _picker.pickImage(
         source: ImageSource.gallery,
-        imageQuality: 80,
-          maxWidth: 1200,
-          maxHeight: 1200,
+        imageQuality: 100,
       );
       return photo == null ? <String>[] : <String>[_fileUri(photo)];
     } catch (_) {
