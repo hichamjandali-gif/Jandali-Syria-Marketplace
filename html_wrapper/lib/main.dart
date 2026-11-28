@@ -1,15 +1,12 @@
-import 'dart:async';
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 const String marketUrl =
-    'https://hichamjandali-gif.github.io/Jandali-Syria-Marketplace/?jandaliNativeApp=1&v=20261127-geo-photo';
+    'https://hichamjandali-gif.github.io/Jandali-Syria-Marketplace/?jandaliNativeApp=1';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -54,12 +51,6 @@ class _MarketWebViewPageState extends State<MarketWebViewPage> {
     try {
       final controller = WebViewController();
       await controller.setJavaScriptMode(JavaScriptMode.unrestricted);
-      await controller.addJavaScriptChannel(
-        'JandaliLocation',
-        onMessageReceived: (message) {
-          unawaited(_handleNativeLocationRequest(message.message));
-        },
-      );
       await controller.setBackgroundColor(Colors.white);
       await controller.setNavigationDelegate(
         NavigationDelegate(
@@ -83,8 +74,7 @@ class _MarketWebViewPageState extends State<MarketWebViewPage> {
               });
             }
           },
-          onPageFinished: (_) async {
-            await _installNativeGeolocationBridge(controller);
+          onPageFinished: (_) {
             if (mounted) setState(() => _loading = false);
           },
           onWebResourceError: (error) {
@@ -107,12 +97,29 @@ class _MarketWebViewPageState extends State<MarketWebViewPage> {
         await android.setAllowFileAccess(true);
         await android.setAllowContentAccess(true);
         await android.setOnShowFileSelector(_selectFiles);
-        // Location is provided through the native JavaScript bridge.
-        await android.setGeolocationEnabled(false);
+        await android.setGeolocationEnabled(true);
+        await android.setGeolocationPermissionsPromptCallbacks(
+          onShowPrompt: (request) async {
+            final origin = Uri.tryParse(request.origin);
+            if (origin == null ||
+                origin.scheme != 'https' ||
+                origin.host != 'hichamjandali-gif.github.io') {
+              return const GeolocationPermissionsResponse(
+                allow: false,
+                retain: false,
+              );
+            }
+            final permission = await Permission.locationWhenInUse.request();
+            return GeolocationPermissionsResponse(
+              allow: permission.isGranted,
+              retain: permission.isGranted,
+            );
+          },
+        );
       }
 
-      if (mounted) setState(() => _controller = controller);
       await controller.loadRequest(Uri.parse(marketUrl));
+      if (mounted) setState(() => _controller = controller);
     } catch (error) {
       if (mounted) {
         setState(() {
@@ -121,99 +128,6 @@ class _MarketWebViewPageState extends State<MarketWebViewPage> {
           _error = error.toString();
         });
       }
-    }
-  }
-
-  Future<void> _installNativeGeolocationBridge(
-    WebViewController controller,
-  ) async {
-    const script = r'''
-      (() => {
-        if (window.__jandaliNativeGeoInstalled) return;
-        window.__jandaliNativeGeoInstalled = true;
-        let nextId = 0;
-        const pending = new Map();
-        window.__jandaliGeoResolve = (id, latitude, longitude, accuracy) => {
-          const callbacks = pending.get(String(id));
-          if (!callbacks) return;
-          pending.delete(String(id));
-          callbacks.success({
-            coords: {latitude: Number(latitude), longitude: Number(longitude),
-              accuracy: Number(accuracy) || 0, altitude: null,
-              altitudeAccuracy: null, heading: null, speed: null},
-            timestamp: Date.now()
-          });
-        };
-        window.__jandaliGeoReject = (id, code, message) => {
-          const callbacks = pending.get(String(id));
-          if (!callbacks) return;
-          pending.delete(String(id));
-          if (callbacks.failure) callbacks.failure({code, message});
-        };
-        const request = (success, failure) => {
-          const id = String(++nextId);
-          pending.set(id, {success, failure});
-          if (!window.JandaliLocation || !window.JandaliLocation.postMessage) {
-            window.__jandaliGeoReject(id, 2, 'خدمة الموقع غير متاحة داخل التطبيق');
-            return id;
-          }
-          window.JandaliLocation.postMessage(id);
-          return id;
-        };
-        const geolocation = {
-          getCurrentPosition(success, failure) { request(success, failure); },
-          watchPosition(success, failure) { return Number(request(success, failure)); },
-          clearWatch() {}
-        };
-        try {
-          Object.defineProperty(navigator, 'geolocation', {configurable: true, value: geolocation});
-        } catch (_) { navigator.geolocation = geolocation; }
-      })();
-    ''';
-    try { await controller.runJavaScript(script); } catch (_) {}
-  }
-
-  Future<void> _handleNativeLocationRequest(String requestId) async {
-    final id = int.tryParse(requestId.trim());
-    if (id == null) return;
-    final controller = _controller;
-    if (controller == null) return;
-
-    Future<void> reject(int code, String message) async {
-      final encodedMessage = jsonEncode(message);
-      await controller.runJavaScript(
-        "window.__jandaliGeoReject?.('$id', $code, $encodedMessage);",
-      );
-    }
-
-    try {
-      if (!await Geolocator.isLocationServiceEnabled()) {
-        await reject(2, 'يرجى تشغيل خدمة الموقع GPS في الهاتف');
-        return;
-      }
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.denied) {
-        await reject(1, 'لم يتم السماح بإذن الموقع');
-        return;
-      }
-      if (permission == LocationPermission.deniedForever) {
-        await reject(1, 'إذن الموقع مرفوض نهائياً. فعّله من إعدادات التطبيق');
-        return;
-      }
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 20),
-        ),
-      );
-      await controller.runJavaScript(
-        "window.__jandaliGeoResolve?.('$id', ${position.latitude}, ${position.longitude}, ${position.accuracy});",
-      );
-    } catch (error) {
-      await reject(2, 'تعذر تحديد GPS: $error');
     }
   }
 
@@ -237,7 +151,7 @@ class _MarketWebViewPageState extends State<MarketWebViewPage> {
       if (params.isCaptureEnabled) {
         final photo = await _picker.pickImage(
           source: ImageSource.camera,
-          imageQuality: 70,
+          imageQuality: 80,
           maxWidth: 1200,
           maxHeight: 1200,
         );
@@ -245,13 +159,13 @@ class _MarketWebViewPageState extends State<MarketWebViewPage> {
       }
 
       if (params.mode == FileSelectorMode.openMultiple) {
-        final photos = await _picker.pickMultiImage(imageQuality: 70, maxWidth: 1200, maxHeight: 1200);
+        final photos = await _picker.pickMultiImage(imageQuality: 80, maxWidth: 1200, maxHeight: 1200);
         return photos.map(_fileUri).toList(growable: false);
       }
 
       final photo = await _picker.pickImage(
         source: ImageSource.gallery,
-        imageQuality: 70,
+        imageQuality: 80,
           maxWidth: 1200,
           maxHeight: 1200,
       );
